@@ -25,6 +25,7 @@ import _io
 import sys
 import _warnings
 import marshal
+import time
 
 
 _MS_WINDOWS = (sys.platform == 'win32')
@@ -848,7 +849,9 @@ class _LoaderBasics:
 
     def exec_module(self, module):
         """Execute the module."""
+        t0 = time.time()
         code = self.get_code(module.__name__)
+        if sys.flags.verbose >= 1: print('[get_code] ' + module.__name__ + ': ' + str((time.time() - t0) * 1000), file=sys.stderr)
         if code is None:
             raise ImportError('cannot load module {!r} when get_code() '
                               'returns None'.format(module.__name__))
@@ -1411,7 +1414,9 @@ class PathFinder:
         """
         if path is None:
             path = sys.path
+        t0 = time.time()
         spec = cls._get_spec(fullname, path, target)
+        if sys.flags.verbose >= 1: print('[find_spec] ' + fullname + ': ' + str((time.time() - t0) * 1000), file=sys.stderr)
         if spec is None:
             return None
         elif spec.loader is None:
