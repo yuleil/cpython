@@ -103,7 +103,7 @@ _PyMem_IsShared(void *ptr)
 void
 _PyMem_SharedMoveIn(PyObject *o)
 {
-    assert(PyLong_CheckExact(o));
+    assert(PyLong_CheckExact(o) || PyUnicode_CheckExact(o));
     PyTypeObject *type = Py_TYPE(o);
     assert(type->tp_copy);
     PyObject *copy = type->tp_copy(o, _PyMem_SharedMalloc);
