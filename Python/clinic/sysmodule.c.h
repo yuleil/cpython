@@ -241,6 +241,33 @@ exit:
     return return_value;
 }
 
+#define SYS_SHM_MOVE_IN_METHODDEF    \
+    {"shm_move_in", (PyCFunction)sys_shm_move_in, METH_O, "tbd"},
+
+static PyObject *
+sys_shm_move_in(PyObject *module, PyObject *arg)
+{
+    if (!PyLong_CheckExact(arg)) {
+        _PyArg_BadArgument("set_shm", "argument", "integer", arg);
+        return NULL;
+    }
+
+    void _PyMem_SharedMoveIn(PyObject *o);
+    _PyMem_SharedMoveIn(arg);
+
+    return Py_None;
+}
+
+#define SYS_SHM_GETOBJ_METHODDEF    \
+    {"shm_getobj", (PyCFunction)sys_shm_getobj, METH_NOARGS, "tbd"},
+
+static PyObject *
+sys_shm_getobj(PyObject *module)
+{
+    PyObject *_PyMem_SharedGetObj();
+    return _PyMem_SharedGetObj();
+}
+
 PyDoc_STRVAR(sys_gettrace__doc__,
 "gettrace($module, /)\n"
 "--\n"

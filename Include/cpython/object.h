@@ -271,6 +271,7 @@ struct _typeobject {
 
     destructor tp_finalize;
     vectorcallfunc tp_vectorcall;
+    copyfunc tp_copy;
 };
 
 /* The *real* layout of a type object when allocated on the heap */

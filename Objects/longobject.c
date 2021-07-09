@@ -243,7 +243,7 @@ _PyLong_FromNbIndexOrNbInt(PyObject *integral)
     ((PY_SSIZE_T_MAX - offsetof(PyLongObject, ob_digit))/sizeof(digit))
 
 PyLongObject *
-_PyLong_New(Py_ssize_t size)
+_PyLong_New0(Py_ssize_t size, void *(*alloc)(size_t))
 {
     PyLongObject *result;
     /* Number of bytes needed is: offsetof(PyLongObject, ob_digit) +
@@ -256,7 +256,7 @@ _PyLong_New(Py_ssize_t size)
                         "too many digits in integer");
         return NULL;
     }
-    result = PyObject_MALLOC(offsetof(PyLongObject, ob_digit) +
+    result = alloc(offsetof(PyLongObject, ob_digit) +
                              size*sizeof(digit));
     if (!result) {
         PyErr_NoMemory();
@@ -265,9 +265,16 @@ _PyLong_New(Py_ssize_t size)
     return (PyLongObject*)PyObject_INIT_VAR(result, &PyLong_Type, size);
 }
 
-PyObject *
-_PyLong_Copy(PyLongObject *src)
+PyLongObject *
+_PyLong_New(Py_ssize_t size)
 {
+    return _PyLong_New0(size, PyObject_Malloc);
+}
+
+PyObject *
+_PyLong_Copy0(PyObject *src0, void *(*alloc)(size_t))
+{
+    PyLongObject *src = (PyLongObject *) src0;
     PyLongObject *result;
     Py_ssize_t i;
 
@@ -275,13 +282,13 @@ _PyLong_Copy(PyLongObject *src)
     i = Py_SIZE(src);
     if (i < 0)
         i = -(i);
-    if (i < 2) {
+    if (i < 2 && alloc == PyObject_Malloc) {
         sdigit ival = MEDIUM_VALUE(src);
         if (IS_SMALL_INT(ival)) {
             return get_small_int(ival);
         }
     }
-    result = _PyLong_New(i);
+    result = _PyLong_New0(i, alloc);
     if (result != NULL) {
         Py_SET_SIZE(result, Py_SIZE(src));
         while (--i >= 0) {
@@ -289,6 +296,12 @@ _PyLong_Copy(PyLongObject *src)
         }
     }
     return (PyObject *)result;
+}
+
+PyObject *
+_PyLong_Copy(PyLongObject *src)
+{
+    return _PyLong_Copy0(src, PyObject_Malloc);
 }
 
 /* Create a new int object from a C long int */
@@ -5709,6 +5722,7 @@ PyTypeObject PyLong_Type = {
     0,                                          /* tp_alloc */
     long_new,                                   /* tp_new */
     PyObject_Del,                               /* tp_free */
+    .tp_copy = _PyLong_Copy0,
 };
 
 static PyTypeObject Int_InfoType;

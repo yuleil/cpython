@@ -294,6 +294,8 @@ typedef struct {
        variable. If set to -1 (default), inherit Py_VerboseFlag value. */
     int verbose;
 
+    int sharedheap;
+
     /* If greater than 0, enable the quiet mode: Don't display the copyright
        and version messages even in interactive mode.
 

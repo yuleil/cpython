@@ -80,6 +80,7 @@ static void _PyObject_Free(void *ctx, void *p);
 static void* _PyObject_Realloc(void *ctx, void *ptr, size_t size);
 #endif
 
+int _PyMem_IsShared(void *ptr);
 
 /* bpo-35053: Declare tracemalloc configuration here rather than
    Modules/_tracemalloc.c because _tracemalloc can be compiled as dynamic
@@ -124,6 +125,7 @@ _PyMem_RawRealloc(void *ctx, void *ptr, size_t size)
 static void
 _PyMem_RawFree(void *ctx, void *ptr)
 {
+    if (_PyMem_IsShared(ptr)) return;
     free(ptr);
 }
 
@@ -626,6 +628,7 @@ PyMem_Realloc(void *ptr, size_t new_size)
 void
 PyMem_Free(void *ptr)
 {
+    if (_PyMem_IsShared(ptr)) return;
     _PyMem.free(_PyMem.ctx, ptr);
 }
 
@@ -706,6 +709,7 @@ PyObject_Realloc(void *ptr, size_t new_size)
 void
 PyObject_Free(void *ptr)
 {
+    if (_PyMem_IsShared(ptr)) return;
     _PyObject.free(_PyObject.ctx, ptr);
 }
 

@@ -192,6 +192,7 @@ typedef int (*descrsetfunc) (PyObject *, PyObject *, PyObject *);
 typedef int (*initproc)(PyObject *, PyObject *, PyObject *);
 typedef PyObject *(*newfunc)(PyTypeObject *, PyObject *, PyObject *);
 typedef PyObject *(*allocfunc)(PyTypeObject *, Py_ssize_t);
+typedef PyObject *(*copyfunc)(PyObject *, void *(*)(size_t));
 
 typedef struct{
     int slot;    /* slot id, see below */

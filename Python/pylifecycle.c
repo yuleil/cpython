@@ -768,6 +768,14 @@ pyinit_config(_PyRuntimeState *runtime,
         return status;
     }
 
+    void *_PyMem_CreateSharedMmap(void);
+    void *_PyMem_LoadSharedMmap(void);
+    if (config->sharedheap == 1) {
+        _PyMem_CreateSharedMmap();
+    } else if (config->sharedheap == 2) {
+        _PyMem_LoadSharedMmap();
+    }
+
     /* Only when we get here is the runtime core fully initialized */
     runtime->core_initialized = 1;
     return _PyStatus_OK();
