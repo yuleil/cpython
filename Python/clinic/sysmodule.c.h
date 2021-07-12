@@ -247,8 +247,8 @@ exit:
 static PyObject *
 sys_shm_move_in(PyObject *module, PyObject *arg)
 {
-    if (!PyLong_CheckExact(arg) && !PyUnicode_CheckExact(arg) && !PyBytes_CheckExact(arg)) {
-        _PyArg_BadArgument("move_in", "argument", "int or str or bytes", arg);
+    if (!Py_TYPE(arg)->tp_copy) {
+        _PyArg_BadArgument("move_in", "argument", "copyable", arg);
         return NULL;
     }
 

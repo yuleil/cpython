@@ -137,6 +137,27 @@ PyTuple_Size(PyObject *op)
 }
 
 PyObject *
+_PyTuple_Copy(PyObject *from, void *(*alloc)(size_t))
+{
+    if (!PyTuple_CheckExact(from)) {
+        PyErr_BadInternalCall();
+        return NULL;
+    }
+    PyTupleObject *fromOp = (PyTupleObject *) from;
+    Py_ssize_t sz = Py_SIZE(from);
+    Py_ssize_t bytes = _PyObject_VAR_SIZE(&PyTuple_Type, sz);
+    PyTupleObject *op = (PyTupleObject *) alloc(bytes);
+    (void) PyObject_INIT_VAR(op, &PyTuple_Type, sz);
+    for (int i = 0; i < sz; i++) {
+        PyObject *elem = fromOp->ob_item[i];
+        assert(Py_TYPE(elem)->tp_copy);
+        op->ob_item[i] = Py_TYPE(elem)->tp_copy(elem, alloc);
+    }
+
+    return (PyObject *)op;
+}
+
+PyObject *
 PyTuple_GetItem(PyObject *op, Py_ssize_t i)
 {
     if (!PyTuple_Check(op)) {
@@ -889,6 +910,7 @@ PyTypeObject PyTuple_Type = {
     tuple_new,                                  /* tp_new */
     PyObject_GC_Del,                            /* tp_free */
     .tp_vectorcall = tuple_vectorcall,
+    .tp_copy = _PyTuple_Copy,
 };
 
 /* The following function breaks the notion that tuples are immutable:

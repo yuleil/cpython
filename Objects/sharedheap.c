@@ -70,6 +70,21 @@ _PyMem_LoadSharedMmap(void)
     return shm;
 }
 
+// typedef int (*visitproc)(PyObject *, void *);
+// typedef int (*traverseproc)(PyObject *, visitproc, void *);
+
+int
+patch_type(PyObject *op, void *shift)
+{
+    PyTypeObject *type = (PyTypeObject *) ((char *) Py_TYPE(op) + (long) shift);
+    printf("[sharedheap] fixing.. = %p, type = %s\n", op, type->tp_name);
+    Py_SET_TYPE(op, type);
+    if (type->tp_traverse) {
+        type->tp_traverse(op, patch_type, shift);
+    }
+    return 0;
+}
+
 void
 patch_obj_header()
 {
@@ -77,8 +92,7 @@ patch_obj_header()
     struct header *h = (struct header *) shm;
     long shift = (char *) &PyBytes_Type - (char *) h->bytes_type_addr;
     printf("[sharedheap] ASLR data segment shift = %c0x%lx\n", shift < 0 ? '-' : ' ', (shift < 0) ? -shift : shift);
-    PyTypeObject *type = Py_TYPE(h->obj);
-    Py_SET_TYPE(h->obj, (PyTypeObject *) ((char *) type + shift));
+    patch_type(h->obj, (void *) shift);
     h->bytes_type_addr = &PyBytes_Type;
 }
 
