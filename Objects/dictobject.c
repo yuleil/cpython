@@ -535,7 +535,6 @@ _PyDict_CheckConsistency(PyObject *op, int check_content)
 #undef CHECK
 }
 
-
 static PyDictKeysObject *new_keys_object(Py_ssize_t size)
 {
     PyDictKeysObject *dk;
@@ -581,7 +580,7 @@ static PyDictKeysObject *new_keys_object(Py_ssize_t size)
     dk->dk_refcnt = 1;
     dk->dk_size = size;
     dk->dk_usable = usable;
-    dk->dk_lookup = lookdict_unicode_nodummy;
+    dk->dk_lookup = lookdict;
     dk->dk_nentries = 0;
     memset(&dk->dk_indices[0], 0xff, es * size);
     memset(DK_ENTRIES(dk), 0, sizeof(PyDictKeyEntry) * usable);
@@ -3152,6 +3151,85 @@ dict_traverse(PyObject *op, visitproc visit, void *arg)
     return 0;
 }
 
+PyObject *
+copy(PyObject *op, void *(*alloc)(size_t))
+{
+    PyDictObject *mp = (PyDictObject *)op;
+    PyDictKeysObject *keys = mp->ma_keys;
+    Py_ssize_t i, n = keys->dk_nentries;
+
+    assert(mp->ma_used);
+    assert(!mp->ma_values);
+    assert(keys->dk_lookup == lookdict);
+
+    PyDictObject *new_mp = (PyDictObject *) alloc(_PyObject_SIZE(&PyDict_Type));
+    PyObject_INIT(new_mp, &PyDict_Type);
+
+    size_t size = keys->dk_size;
+
+    PyDictKeysObject *dk;
+    Py_ssize_t es;
+
+    assert(size >= PyDict_MINSIZE);
+    assert(IS_POWER_OF_2(size));
+
+    Py_ssize_t usable = USABLE_FRACTION(size);
+    if (size <= 0xff) {
+        es = 1;
+    }
+    else if (size <= 0xffff) {
+        es = 2;
+    }
+#if SIZEOF_VOID_P > 4
+    else if (size <= 0xffffffff) {
+        es = 4;
+    }
+#endif
+    else {
+        es = sizeof(Py_ssize_t);
+    }
+    dk = alloc(sizeof(PyDictKeysObject)
+               + es * size
+               + sizeof(PyDictKeyEntry) * usable);
+    if (dk == NULL) {
+        PyErr_NoMemory();
+        return NULL;
+    }
+    dk->dk_refcnt = 1;
+    dk->dk_size = keys->dk_size;
+    dk->dk_usable = keys->dk_usable;
+    dk->dk_lookup = lookdict;
+    dk->dk_nentries = keys->dk_nentries;
+    memcpy(&dk->dk_indices[0], &keys->dk_indices, es * size);
+    memcpy(DK_ENTRIES(dk), DK_ENTRIES(keys), sizeof(PyDictKeyEntry) * usable);
+
+    PyDictKeyEntry *entries = DK_ENTRIES(dk);
+    for (i = 0; i < n; i++) {
+        if (entries[i].me_value != NULL) {
+            PyObject *k = entries[i].me_key;
+            assert(Py_TYPE(k)->tp_copy);
+            entries[i].me_key = Py_TYPE(k)->tp_copy(k, alloc);
+            PyObject *v = entries[i].me_value;
+            assert(Py_TYPE(v)->tp_copy);
+            entries[i].me_value = Py_TYPE(v)->tp_copy(v, alloc);
+        }
+    }
+
+    new_mp->ma_used = mp->ma_used;
+    new_mp->ma_version_tag = mp->ma_version_tag;
+    new_mp->ma_keys = dk;
+    new_mp->ma_values = NULL;
+
+    return (PyObject *)new_mp;
+}
+
+void
+after_patch(PyObject *op)
+{
+    PyDictObject *mp = (PyDictObject *)op;
+    mp->ma_keys->dk_lookup = lookdict;
+}
+
 static int
 dict_tp_clear(PyObject *op)
 {
@@ -3457,6 +3535,8 @@ PyTypeObject PyDict_Type = {
     dict_new,                                   /* tp_new */
     PyObject_GC_Del,                            /* tp_free */
     .tp_vectorcall = dict_vectorcall,
+    .tp_copy = copy,
+    .tp_after_patch = after_patch,
 };
 
 PyObject *

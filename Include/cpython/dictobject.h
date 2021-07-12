@@ -21,7 +21,7 @@ typedef struct {
        the dictionary is modified */
     uint64_t ma_version_tag;
 
-    PyDictKeysObject *ma_keys;
+    PyDictKeysObject *ma_keys;/**/
 
     /* If ma_values is NULL, the table is "combined": keys and values
        are stored in ma_keys.

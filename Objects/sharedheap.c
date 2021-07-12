@@ -79,6 +79,9 @@ patch_type(PyObject *op, void *shift)
     PyTypeObject *type = (PyTypeObject *) ((char *) Py_TYPE(op) + (long) shift);
     printf("[sharedheap] fixing.. = %p, type = %s\n", op, type->tp_name);
     Py_SET_TYPE(op, type);
+    if (type->tp_after_patch) {
+        type->tp_after_patch(op);
+    }
     if (type->tp_traverse) {
         type->tp_traverse(op, patch_type, shift);
     }
@@ -93,6 +96,7 @@ patch_obj_header()
     long shift = (char *) &PyBytes_Type - (char *) h->bytes_type_addr;
     printf("[sharedheap] ASLR data segment shift = %c0x%lx\n", shift < 0 ? '-' : ' ', (shift < 0) ? -shift : shift);
     patch_type(h->obj, (void *) shift);
+    printf("[sharedheap] ASLR fix FINISH\n");
     h->bytes_type_addr = &PyBytes_Type;
 }
 
@@ -121,7 +125,7 @@ _PyMem_SharedMoveIn(PyObject *o)
     assert(type->tp_copy);
     PyObject *copy = type->tp_copy(o, _PyMem_SharedMalloc);
     assert(_PyMem_IsShared(copy));
-    printf("[sharedheap] copy from %p to %p\n", o, copy);
+    printf("[sharedheap] copy a %s from %p to %p\n", Py_TYPE(copy)->tp_name, o, copy);
     struct header *h = (struct header *) shm;
     h->obj = copy;
 }
