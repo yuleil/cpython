@@ -165,6 +165,25 @@ PyBytes_FromString(const char *str)
 }
 
 PyObject *
+_PyBytes_Copy(PyObject *from, void *(*alloc)(size_t))
+{
+    if (!PyBytes_Check(from)) {
+        PyErr_Format(PyExc_TypeError,
+                     "expected bytes, %.200s found", Py_TYPE(from)->tp_name);
+        return NULL;
+    }
+    Py_ssize_t sz = Py_SIZE(from);
+    PyBytesObject *fromOp = (PyBytesObject *)from;
+
+    PyBytesObject *op = (PyBytesObject *)alloc(PyBytesObject_SIZE + sz);
+    (void)PyObject_INIT_VAR(op, &PyBytes_Type, sz);
+    op->ob_shash = fromOp->ob_shash;
+    memcpy(op->ob_sval, fromOp->ob_sval, sz+1);
+
+    return (PyObject *)op;
+}
+
+PyObject *
 PyBytes_FromFormatV(const char *format, va_list vargs)
 {
     char *s;
@@ -2923,6 +2942,7 @@ PyTypeObject PyBytes_Type = {
     0,                                          /* tp_alloc */
     bytes_new,                                  /* tp_new */
     PyObject_Del,                               /* tp_free */
+    .tp_copy = _PyBytes_Copy,
 };
 
 void
