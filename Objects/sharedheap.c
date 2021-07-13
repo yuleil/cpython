@@ -121,7 +121,9 @@ patch_obj_header()
     long shift = (char *) &PyBytes_Type - (char *) h->bytes_type_addr;
     printf("[sharedheap] ASLR data segment shift = %c0x%lx\n", shift < 0 ? '-' : ' ', (shift < 0) ? -shift : shift);
     long t0 = nanoTime();
-    patch_type1(&h->obj, (void *) shift);
+    if (h->obj) {
+        patch_type1(&h->obj, (void *) shift);
+    }
     printf("[sharedheap] ASLR fix FINISH, elapsed=%ld ns\n", nanoTime() - t0);
 }
 

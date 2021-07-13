@@ -296,6 +296,13 @@ typedef struct {
 
     int sharedheap;
 
+    /*
+     * 0: disable
+     * 1: dump
+     * 2: share
+     */
+    int sharecode;
+
     /* If greater than 0, enable the quiet mode: Don't display the copyright
        and version messages even in interactive mode.
 

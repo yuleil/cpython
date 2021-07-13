@@ -2444,6 +2444,7 @@ static PyStructSequence_Field flags_fields[] = {
     {"isolated",                "-I"},
     {"dev_mode",                "-X dev"},
     {"utf8_mode",               "-X utf8"},
+    {"share_code",              "TBD"},
     {0}
 };
 
@@ -2451,7 +2452,7 @@ static PyStructSequence_Desc flags_desc = {
     "sys.flags",        /* name */
     flags__doc__,       /* doc */
     flags_fields,       /* fields */
-    15
+    16
 };
 
 static PyObject*
@@ -2487,6 +2488,7 @@ make_flags(PyThreadState *tstate)
     SetFlag(config->isolated);
     PyStructSequence_SET_ITEM(seq, pos++, PyBool_FromLong(config->dev_mode));
     SetFlag(preconfig->utf8_mode);
+    SetFlag(config->sharecode);
 #undef SetFlag
 
     if (_PyErr_Occurred(tstate)) {
