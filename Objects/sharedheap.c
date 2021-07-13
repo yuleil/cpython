@@ -22,6 +22,14 @@ struct header {
     PyObject *obj;
 };
 
+static inline long
+nanoTime()
+{
+    struct timespec t;
+    clock_gettime(CLOCK_MONOTONIC, &t);
+    return t.tv_sec * 1000000000 + t.tv_nsec;
+}
+
 void *
 _PyMem_CreateSharedMmap(void)
 {
@@ -36,7 +44,7 @@ _PyMem_CreateSharedMmap(void)
                MAP_SHARED, fd, 0);
     if (shm == MAP_FAILED) {
         perror("mmap");
-        exit(-1);
+        abort();
     }
     close(fd);
     struct header *h = (struct header *) shm;
@@ -59,13 +67,15 @@ _PyMem_LoadSharedMmap(void)
         abort();
     }
     printf("[sharedheap] requesting %p...", h.mapped_addr);
+    long t0 = nanoTime();
     shm = mmap(h.mapped_addr, buf.st_size, PROT_READ | PROT_WRITE,
                MAP_PRIVATE | MAP_FIXED, fd, 0);
     if (shm == MAP_FAILED || shm != h.mapped_addr) {
         perror("mmap");
         abort();
     }
-    printf("SUCCESS\n");
+    close(fd);
+    printf("SUCCESS elapsed=%ld ns\n", nanoTime() - t0);
     patch_obj_header();
     return shm;
 }
@@ -96,32 +106,11 @@ patch_type(PyObject *op, void *shift)
 int
 patch_type1(PyObject **opp, void *shift)
 {
-    PyObject *op = *opp;
-    PyTypeObject *type = (PyTypeObject *) ((char *) Py_TYPE(op) + (long) shift);
-    printf("[sharedheap] fix op%p: %p -> %p", op, Py_TYPE(op), type);
-    fflush(stdout);
-    printf("... %s\n", type->tp_name);
-    Py_SET_TYPE(op, type);
-    if (type->tp_after_patch) {
-        type->tp_after_patch(op);
-    }
-    if (type == &_PyNone_Type) {
+    patch_type(*opp, shift);
+    if (Py_TYPE(*opp) == &_PyNone_Type) {
         *opp = Py_None;
     }
-    if (type->tp_traverse1) {
-        type->tp_traverse1(op, patch_type1, shift);
-    } else if (type->tp_traverse) {
-        type->tp_traverse(op, patch_type, shift);
-    }
     return 0;
-}
-
-static inline long
-nanoTime()
-{
-    struct timespec t;
-    clock_gettime(CLOCK_MONOTONIC, &t);
-    return t.tv_sec * 1000000000 + t.tv_nsec;
 }
 
 void
