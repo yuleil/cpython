@@ -213,6 +213,16 @@ PyFloat_FromString(PyObject *v)
     return result;
 }
 
+static PyObject *
+float_copy(PyObject *from, void *(*alloc)(size_t))
+{
+    PyFloatObject *op = alloc(_PyObject_SIZE(&PyFloat_Type));
+    PyObject_INIT(op, &PyFloat_Type);
+
+    op->ob_fval = ((PyFloatObject *) from)->ob_fval;
+    return (PyObject *) op;
+}
+
 static void
 float_dealloc(PyFloatObject *op)
 {
@@ -1918,6 +1928,7 @@ PyTypeObject PyFloat_Type = {
     0,                                          /* tp_init */
     0,                                          /* tp_alloc */
     float_new,                                  /* tp_new */
+    .tp_copy = float_copy
 };
 
 int
