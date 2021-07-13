@@ -150,6 +150,9 @@ _PyTuple_Copy(PyObject *from, void *(*alloc)(size_t))
     (void) PyObject_INIT_VAR(op, &PyTuple_Type, sz);
     for (int i = 0; i < sz; i++) {
         PyObject *elem = fromOp->ob_item[i];
+        if (!Py_TYPE(elem)->tp_copy) {
+            printf("%s is not copyable\n", Py_TYPE(elem)->tp_name);
+        }
         assert(Py_TYPE(elem)->tp_copy);
         op->ob_item[i] = Py_TYPE(elem)->tp_copy(elem, alloc);
     }

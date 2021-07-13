@@ -851,6 +851,13 @@ class _LoaderBasics:
         """Execute the module."""
         t0 = time.time()
         code = self.get_code(module.__name__)
+        if sys.flags.share_code == 1:
+            if not hasattr(sys, 'shared_code'):
+                sys.shared_code = {}
+                import atexit
+                atexit.register(lambda: sys.shm_move_in(sys.shared_code))
+            sys.shared_code[module.__name__] = code
+
         if sys.flags.verbose >= 1: print('[get_code] ' + module.__name__ + ': ' + str((time.time() - t0) * 1000), file=sys.stderr)
         if code is None:
             raise ImportError('cannot load module {!r} when get_code() '
