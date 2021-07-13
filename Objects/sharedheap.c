@@ -109,6 +109,9 @@ patch_type1(PyObject **opp, void *shift)
     patch_type(*opp, shift);
     if (Py_TYPE(*opp) == &_PyNone_Type) {
         *opp = Py_None;
+    } else if (Py_TYPE(*opp) == &PyBool_Type) {
+        *opp = ((struct _longobject *) *opp)->ob_digit[0] ?
+               Py_True : Py_False;
     }
     return 0;
 }

@@ -13,7 +13,7 @@ bool_repr(PyObject *self)
 {
     PyObject *s;
 
-    if (self == Py_True)
+    if (self == Py_True || PyBool_Check(self) && ((struct _longobject *) self)->ob_digit[0])
         s = true_str ? true_str :
             (true_str = PyUnicode_InternFromString("True"));
     else
@@ -53,6 +53,16 @@ bool_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     if (ok < 0)
         return NULL;
     return PyBool_FromLong(ok);
+}
+
+static PyObject *
+bool_copy(PyObject *from, void *(*alloc)(size_t))
+{
+    struct _longobject *op = alloc(_PyObject_SIZE(&PyBool_Type));
+    (void) PyObject_INIT(op, &PyBool_Type);
+
+    op->ob_digit[0] = ((struct _longobject *)from)->ob_digit[0];
+    return (PyObject *) op;
 }
 
 /* Arithmetic operations redefined to return bool if both args are bool. */
@@ -170,6 +180,7 @@ PyTypeObject PyBool_Type = {
     0,                                          /* tp_init */
     0,                                          /* tp_alloc */
     bool_new,                                   /* tp_new */
+    .tp_copy = bool_copy,
 };
 
 /* The objects representing bool values False and True */
