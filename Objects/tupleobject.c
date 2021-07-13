@@ -646,6 +646,16 @@ tupletraverse(PyTupleObject *o, visitproc visit, void *arg)
     return 0;
 }
 
+static int
+tupletraverse1(PyTupleObject *o, visitproc1 visit, void *arg)
+{
+    Py_ssize_t i;
+
+    for (i = Py_SIZE(o); --i >= 0; )
+        Py_VISIT_REF(o->ob_item[i]);
+    return 0;
+}
+
 static PyObject *
 tuplerichcompare(PyObject *v, PyObject *w, int op)
 {
@@ -911,6 +921,7 @@ PyTypeObject PyTuple_Type = {
     PyObject_GC_Del,                            /* tp_free */
     .tp_vectorcall = tuple_vectorcall,
     .tp_copy = _PyTuple_Copy,
+    .tp_traverse1 = (traverseproc1)tupletraverse1,
 };
 
 /* The following function breaks the notion that tuples are immutable:

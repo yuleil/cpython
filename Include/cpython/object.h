@@ -273,6 +273,7 @@ struct _typeobject {
     vectorcallfunc tp_vectorcall;
     copyfunc tp_copy;
     destructor tp_after_patch;
+    traverseproc1 tp_traverse1;
 };
 
 /* The *real* layout of a type object when allocated on the heap */

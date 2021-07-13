@@ -203,6 +203,15 @@ PyAPI_FUNC(int) PyObject_GC_IsFinalized(PyObject *);
         }                                                               \
     } while (0)
 
+#define Py_VISIT_REF(op)                                                \
+    do {                                                                \
+        if (op) {                                                       \
+            int vret = visit(&op, arg);                 \
+            if (vret)                                                   \
+                return vret;                                            \
+        }                                                               \
+    } while (0)
+
 #ifndef Py_LIMITED_API
 #  define Py_CPYTHON_OBJIMPL_H
 #  include  "cpython/objimpl.h"

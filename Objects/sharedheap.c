@@ -72,6 +72,7 @@ _PyMem_LoadSharedMmap(void)
 
 // typedef int (*visitproc)(PyObject *, void *);
 // typedef int (*traverseproc)(PyObject *, visitproc, void *);
+int patch_type1(PyObject **opp, void *shift);
 
 int
 patch_type(PyObject *op, void *shift)
@@ -82,7 +83,30 @@ patch_type(PyObject *op, void *shift)
     if (type->tp_after_patch) {
         type->tp_after_patch(op);
     }
-    if (type->tp_traverse) {
+    if (type->tp_traverse1) {
+        type->tp_traverse1(op, patch_type1, shift);
+    } else if (type->tp_traverse) {
+        type->tp_traverse(op, patch_type, shift);
+    }
+    return 0;
+}
+
+int
+patch_type1(PyObject **opp, void *shift)
+{
+    PyObject *op = *opp;
+    PyTypeObject *type = (PyTypeObject *) ((char *) Py_TYPE(op) + (long) shift);
+    printf("[sharedheap] fixing.. = %p, type = %s\n", op, type->tp_name);
+    Py_SET_TYPE(op, type);
+    if (type->tp_after_patch) {
+        type->tp_after_patch(op);
+    }
+//    if (type == &_PyNone_Type) {
+//        *opp = Py_None;
+//    }
+    if (type->tp_traverse1) {
+        type->tp_traverse1(op, patch_type1, shift);
+    } else if (type->tp_traverse) {
         type->tp_traverse(op, patch_type, shift);
     }
     return 0;
@@ -95,7 +119,7 @@ patch_obj_header()
     struct header *h = (struct header *) shm;
     long shift = (char *) &PyBytes_Type - (char *) h->bytes_type_addr;
     printf("[sharedheap] ASLR data segment shift = %c0x%lx\n", shift < 0 ? '-' : ' ', (shift < 0) ? -shift : shift);
-    patch_type(h->obj, (void *) shift);
+    patch_type1(&h->obj, (void *) shift);
     printf("[sharedheap] ASLR fix FINISH\n");
     h->bytes_type_addr = &PyBytes_Type;
 }

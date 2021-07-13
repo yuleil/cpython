@@ -3151,6 +3151,37 @@ dict_traverse(PyObject *op, visitproc visit, void *arg)
     return 0;
 }
 
+static int
+dict_traverse1(PyObject *op, visitproc1 visit, void *arg)
+{
+    PyDictObject *mp = (PyDictObject *)op;
+    PyDictKeysObject *keys = mp->ma_keys;
+    PyDictKeyEntry *entries = DK_ENTRIES(keys);
+    Py_ssize_t i, n = keys->dk_nentries;
+
+    if (keys->dk_lookup == lookdict) {
+        for (i = 0; i < n; i++) {
+            if (entries[i].me_value != NULL) {
+                Py_VISIT_REF(entries[i].me_value);
+                Py_VISIT_REF(entries[i].me_key);
+            }
+        }
+    }
+    else {
+        if (mp->ma_values != NULL) {
+            for (i = 0; i < n; i++) {
+                Py_VISIT_REF(mp->ma_values[i]);
+            }
+        }
+        else {
+            for (i = 0; i < n; i++) {
+                Py_VISIT_REF(entries[i].me_value);
+            }
+        }
+    }
+    return 0;
+}
+
 PyObject *
 copy(PyObject *op, void *(*alloc)(size_t))
 {
@@ -3537,6 +3568,7 @@ PyTypeObject PyDict_Type = {
     .tp_vectorcall = dict_vectorcall,
     .tp_copy = copy,
     .tp_after_patch = after_patch,
+    .tp_traverse1 = dict_traverse1,
 };
 
 PyObject *

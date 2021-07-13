@@ -1583,6 +1583,14 @@ static PyNumberMethods none_as_number = {
     0,                          /* nb_index */
 };
 
+static PyObject *
+_PyNone_copy(PyObject *from, void *(*alloc)(size_t))
+{
+    PyObject *op = alloc(sizeof(PyObject));
+    PyObject_INIT(op, &_PyNone_Type);
+    return op;
+}
+
 PyTypeObject _PyNone_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
     "NoneType",
@@ -1622,6 +1630,7 @@ PyTypeObject _PyNone_Type = {
     0,                  /*tp_init */
     0,                  /*tp_alloc */
     none_new,           /*tp_new */
+    .tp_copy = _PyNone_copy,
 };
 
 PyObject _Py_NoneStruct = {
