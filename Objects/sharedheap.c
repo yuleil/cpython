@@ -112,6 +112,14 @@ patch_type1(PyObject **opp, void *shift)
     return 0;
 }
 
+static inline long
+nanoTime()
+{
+    struct timespec t;
+    clock_gettime(CLOCK_MONOTONIC, &t);
+    return t.tv_sec * 1000000000 + t.tv_nsec;
+}
+
 void
 patch_obj_header()
 {
@@ -119,8 +127,9 @@ patch_obj_header()
     struct header *h = (struct header *) shm;
     long shift = (char *) &PyBytes_Type - (char *) h->bytes_type_addr;
     printf("[sharedheap] ASLR data segment shift = %c0x%lx\n", shift < 0 ? '-' : ' ', (shift < 0) ? -shift : shift);
+    long t0 = nanoTime();
     patch_type1(&h->obj, (void *) shift);
-    printf("[sharedheap] ASLR fix FINISH\n");
+    printf("[sharedheap] ASLR fix FINISH, elapsed=%ld ns\n", nanoTime() - t0);
 }
 
 static void *
