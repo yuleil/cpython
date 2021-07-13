@@ -60,7 +60,7 @@ _PyMem_LoadSharedMmap(void)
     }
     printf("[sharedheap] requesting %p...", h.mapped_addr);
     shm = mmap(h.mapped_addr, buf.st_size, PROT_READ | PROT_WRITE,
-               MAP_SHARED | MAP_FIXED, fd, 0);
+               MAP_PRIVATE | MAP_FIXED, fd, 0);
     if (shm == MAP_FAILED || shm != h.mapped_addr) {
         perror("mmap");
         abort();
@@ -101,9 +101,9 @@ patch_type1(PyObject **opp, void *shift)
     if (type->tp_after_patch) {
         type->tp_after_patch(op);
     }
-//    if (type == &_PyNone_Type) {
-//        *opp = Py_None;
-//    }
+    if (type == &_PyNone_Type) {
+        *opp = Py_None;
+    }
     if (type->tp_traverse1) {
         type->tp_traverse1(op, patch_type1, shift);
     } else if (type->tp_traverse) {
@@ -121,7 +121,6 @@ patch_obj_header()
     printf("[sharedheap] ASLR data segment shift = %c0x%lx\n", shift < 0 ? '-' : ' ', (shift < 0) ? -shift : shift);
     patch_type1(&h->obj, (void *) shift);
     printf("[sharedheap] ASLR fix FINISH\n");
-    h->bytes_type_addr = &PyBytes_Type;
 }
 
 static void *
