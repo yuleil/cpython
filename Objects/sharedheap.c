@@ -78,7 +78,9 @@ int
 patch_type(PyObject *op, void *shift)
 {
     PyTypeObject *type = (PyTypeObject *) ((char *) Py_TYPE(op) + (long) shift);
-    printf("[sharedheap] fixing.. = %p, type = %s\n", op, type->tp_name);
+    printf("[sharedheap] fix op%p: %p -> %p", op, Py_TYPE(op), type);
+    fflush(stdout);
+    printf("... %s\n", type->tp_name);
     Py_SET_TYPE(op, type);
     if (type->tp_after_patch) {
         type->tp_after_patch(op);
@@ -96,7 +98,9 @@ patch_type1(PyObject **opp, void *shift)
 {
     PyObject *op = *opp;
     PyTypeObject *type = (PyTypeObject *) ((char *) Py_TYPE(op) + (long) shift);
-    printf("[sharedheap] fixing.. = %p, type = %s\n", op, type->tp_name);
+    printf("[sharedheap] fix op%p: %p -> %p", op, Py_TYPE(op), type);
+    fflush(stdout);
+    printf("... %s\n", type->tp_name);
     Py_SET_TYPE(op, type);
     if (type->tp_after_patch) {
         type->tp_after_patch(op);
@@ -157,7 +161,7 @@ _PyMem_SharedMoveIn(PyObject *o)
     assert(type->tp_copy);
     PyObject *copy = type->tp_copy(o, _PyMem_SharedMalloc);
     assert(_PyMem_IsShared(copy));
-    printf("[sharedheap] copy a %s from %p to %p\n", Py_TYPE(copy)->tp_name, o, copy);
+    printf("[sharedheap] deep copy a `%s object`@%p to %p\n", Py_TYPE(copy)->tp_name, o, copy);
     struct header *h = (struct header *) shm;
     h->obj = copy;
 }

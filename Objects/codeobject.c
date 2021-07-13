@@ -271,6 +271,71 @@ PyCode_NewWithPosOnlyArgs(int argcount, int posonlyargcount, int kwonlyargcount,
     return co;
 }
 
+PyObject *
+_PyCode_Copy(PyObject *from, void *(*alloc)(size_t))
+{
+    PyCodeObject *fromCo = (PyCodeObject *)from;
+
+    Py_ssize_t *cell2arg = NULL;
+    int n_cellvars = PyTuple_GET_SIZE(fromCo->co_cellvars);
+    if (n_cellvars && fromCo->co_cell2arg) {
+        cell2arg = alloc(n_cellvars * sizeof(Py_ssize_t));
+        memcpy(cell2arg, fromCo->co_cellvars, n_cellvars * sizeof(Py_ssize_t));
+    }
+
+    PyCodeObject *co = (PyCodeObject *) alloc(_PyObject_SIZE(&PyCode_Type));
+    PyObject_INIT(co, &PyCode_Type);
+
+#define COPY_FIELD(field) do { \
+    PyTypeObject *type = Py_TYPE(fromCo->field); \
+    assert(type->tp_copy);     \
+    co->field = type->tp_copy(fromCo->field, alloc);\
+} while (0)
+
+    co->co_argcount = fromCo->co_argcount;
+    co->co_posonlyargcount = fromCo->co_posonlyargcount;
+    co->co_kwonlyargcount = fromCo->co_kwonlyargcount;
+    co->co_nlocals = fromCo->co_nlocals;
+    co->co_stacksize = fromCo->co_stacksize;
+    co->co_flags = fromCo->co_flags;
+    co->co_firstlineno = fromCo->co_firstlineno;
+    COPY_FIELD(co_code);
+    COPY_FIELD(co_consts);
+    COPY_FIELD(co_names);
+    COPY_FIELD(co_varnames);
+    COPY_FIELD(co_freevars);
+    COPY_FIELD(co_cellvars);
+    co->co_cell2arg = cell2arg;
+    COPY_FIELD(co_name);
+    COPY_FIELD(co_filename);
+    COPY_FIELD(co_lnotab);
+    co->co_zombieframe = NULL;
+    co->co_weakreflist = NULL;
+    co->co_extra = NULL;
+    co->co_opcache_map = NULL;
+    co->co_opcache = NULL;
+    co->co_opcache_flag = 0;
+    co->co_opcache_size = 0;
+
+    return (PyObject *) co;
+}
+
+static int
+code_traverse1(PyObject *op, visitproc1 visit, void *arg)
+{
+    PyCodeObject *co = (PyCodeObject *)op;
+    Py_VISIT_REF(co->co_code);
+    Py_VISIT_REF(co->co_consts);
+    Py_VISIT_REF(co->co_names);
+    Py_VISIT_REF(co->co_varnames);
+    Py_VISIT_REF(co->co_freevars);
+    Py_VISIT_REF(co->co_cellvars);
+    Py_VISIT_REF(co->co_name);
+    Py_VISIT_REF(co->co_filename);
+    Py_VISIT_REF(co->co_lnotab);
+    return 0;
+}
+
 PyCodeObject *
 PyCode_New(int argcount, int kwonlyargcount,
            int nlocals, int stacksize, int flags,
@@ -981,6 +1046,8 @@ PyTypeObject PyCode_Type = {
     0,                                  /* tp_init */
     0,                                  /* tp_alloc */
     code_new,                           /* tp_new */
+    .tp_copy = _PyCode_Copy,
+    .tp_traverse1 = code_traverse1,
 };
 
 /* Use co_lnotab to compute the line number from a bytecode index, addrq.  See
