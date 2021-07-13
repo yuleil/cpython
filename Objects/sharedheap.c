@@ -112,6 +112,8 @@ patch_type1(PyObject **opp, void *shift)
     } else if (Py_TYPE(*opp) == &PyBool_Type) {
         *opp = ((struct _longobject *) *opp)->ob_digit[0] ?
                Py_True : Py_False;
+    } else if (Py_TYPE(*opp) == &PyEllipsis_Type) {
+        *opp = Py_Ellipsis;
     }
     return 0;
 }
