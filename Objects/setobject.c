@@ -972,7 +972,11 @@ copy_set(PyObject *from, void *(*alloc)(size_t))
     size_t size = _PyObject_SIZE(Py_TYPE(from));
     PySetObject *op = alloc(size);
     PyObject_INIT(op, Py_TYPE(from));
-    memcpy(op, from, size);
+    op->used = from_set->used;
+    op->mask = from_set-> mask;
+    op->fill = from_set->fill;
+    op->hash = from_set->hash;
+    op->finger = from_set->finger;
     if (from_set->smalltable == from_set->table) {
         op->table = op->smalltable;
     } else {
