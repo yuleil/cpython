@@ -983,7 +983,7 @@ copy_set(PyObject *from, void *(*alloc)(size_t))
         op->table = alloc(sizeof(setentry) * (from_set->mask + 1));
         memset(op->table, 0, sizeof(setentry) * (from_set->mask + 1));
     }
-    for (int i; i <= from_set->mask; i++) {
+    for (int i = 0; i <= from_set->mask; i++) {
         PyObject *k = from_set->table[i].key;
         if (k) {
             assert(Py_TYPE(k)->tp_copy);

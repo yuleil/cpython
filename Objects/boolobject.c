@@ -13,7 +13,7 @@ bool_repr(PyObject *self)
 {
     PyObject *s;
 
-    if (self == Py_True || PyBool_Check(self) && ((struct _longobject *) self)->ob_digit[0])
+    if (self == Py_True || (PyBool_Check(self) && ((struct _longobject *) self)->ob_digit[0]))
         s = true_str ? true_str :
             (true_str = PyUnicode_InternFromString("True"));
     else

@@ -14,7 +14,7 @@
 
 static char *shm;
 static size_t offset = 4096;
-static int n_alloc, n_free;
+static int n_alloc;
 
 struct header {
     void *mapped_addr;
@@ -53,7 +53,7 @@ _PyMem_CreateSharedMmap(void)
     return shm;
 }
 
-void patch_obj_header();
+void patch_obj_header(void);
 
 void *
 _PyMem_LoadSharedMmap(void)
@@ -88,9 +88,9 @@ int
 patch_type(PyObject *op, void *shift)
 {
     PyTypeObject *type = (PyTypeObject *) ((char *) Py_TYPE(op) + (long) shift);
-    printf("[sharedheap] fix op%p: %p -> %p", op, Py_TYPE(op), type);
-    fflush(stdout);
-    printf("... %s\n", type->tp_name);
+//    printf("[sharedheap] fix op%p: %p -> %p", op, Py_TYPE(op), type);
+//    fflush(stdout);
+//    printf("... %s\n", type->tp_name);
     Py_SET_TYPE(op, type);
     if (type->tp_after_patch) {
         type->tp_after_patch(op);
@@ -119,7 +119,7 @@ patch_type1(PyObject **opp, void *shift)
 }
 
 void
-patch_obj_header()
+patch_obj_header(void)
 {
     assert(shm);
     struct header *h = (struct header *) shm;
@@ -163,7 +163,7 @@ _PyMem_SharedMoveIn(PyObject *o)
 }
 
 PyObject *
-_PyMem_SharedGetObj()
+_PyMem_SharedGetObj(void)
 {
     struct header *h = (struct header *) shm;
     if (!h->obj) return Py_None;

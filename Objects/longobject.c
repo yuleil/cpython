@@ -301,7 +301,7 @@ _PyLong_Copy0(PyObject *src0, void *(*alloc)(size_t))
 PyObject *
 _PyLong_Copy(PyLongObject *src)
 {
-    return _PyLong_Copy0(src, PyObject_Malloc);
+    return _PyLong_Copy0((PyObject *)src, PyObject_Malloc);
 }
 
 /* Create a new int object from a C long int */
