@@ -14,7 +14,6 @@
 
 static char *shm;
 struct header *h;
-static size_t offset = 4096;
 static int n_alloc;
 
 struct header {
@@ -23,6 +22,7 @@ struct header {
     void *true_addr;
     void *false_addr;
     void *ellipsis_addr;
+    size_t used;
     PyObject *obj;
 };
 
@@ -57,11 +57,11 @@ _PyMem_CreateSharedMmap(void)
     h->true_addr = Py_True;
     h->false_addr = Py_False;
     h->ellipsis_addr = Py_Ellipsis;
+    h->used = 4096;
     return shm;
 }
 
 void patch_obj_header(void);
-
 
 void *
 _PyMem_LoadSharedMmap(void)
@@ -77,14 +77,18 @@ _PyMem_LoadSharedMmap(void)
     printf("[sharedheap] requesting %p...", tmp_header.mapped_addr);
     long t0 = nanoTime();
     shm = mmap(tmp_header.mapped_addr, buf.st_size, PROT_READ | PROT_WRITE,
-               MAP_PRIVATE | MAP_FIXED, fd, 0);
+               MAP_SHARED | MAP_FIXED, fd, 0);
     if (shm == MAP_FAILED || shm != tmp_header.mapped_addr) {
         perror("mmap");
         abort();
     }
     close(fd);
-    printf("SUCCESS elapsed=%ld ns\n", nanoTime() - t0);
     h = (struct header *) shm;
+    if (madvise(shm, (h->used + 4095) & ~4095, MADV_WILLNEED) != 0) {
+        perror("madvise");
+        abort();
+    }
+    printf("SUCCESS elapsed=%ld ns\n", nanoTime() - t0);
     patch_obj_header();
     return shm;
 }
@@ -131,10 +135,16 @@ patch_obj_header(void)
 {
     assert(shm);
     long shift = (char *) Py_None - (char *) h->none_addr;
-    printf("[sharedheap] ASLR data segment shift = %c0x%lx\n", shift < 0 ? '-' : ' ', (shift < 0) ? -shift : shift);
+    printf("[sharedheap] ASLR data segment shift = %c0x%lx\n", shift < 0 ? '-' : ' ', labs(shift));
     long t0 = nanoTime();
-    if (shift && h->obj) {
-        patch_type1(&h->obj, (void *) shift);
+    if (shift) {
+        if (h->obj) {
+            patch_type1(&h->obj, (void *) shift);
+        }
+        h->none_addr = Py_None;
+        h->true_addr = Py_True;
+        h->false_addr = Py_False;
+        h->ellipsis_addr = Py_Ellipsis;
     }
     printf("[sharedheap] ASLR fix FINISH, elapsed=%ld ns\n", nanoTime() - t0);
 }
@@ -145,9 +155,8 @@ _PyMem_SharedMalloc(size_t size)
     n_alloc++;
     if (!size) size = 1;
     size_t size_aligned = (size + 7) & ~7;
-    void *res = shm + offset;
-    offset += size_aligned;
-    printf("[sharedheap] size=%ld, size_aligned=%ld, p = %p\n", size, size_aligned, res);
+    void *res = shm + h->used;
+    h->used += size_aligned;
     return res;
 }
 
