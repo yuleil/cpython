@@ -66,6 +66,7 @@ void patch_obj_header(void);
 void *
 _PyMem_LoadSharedMmap(void)
 {
+    long t0 = nanoTime();
     int fd = open(IMG_FILE, O_RDWR);
     struct stat buf;
     fstat(fd, &buf);
@@ -75,7 +76,6 @@ _PyMem_LoadSharedMmap(void)
         abort();
     }
     printf("[sharedheap] requesting %p...", tmp_header.mapped_addr);
-    long t0 = nanoTime();
     shm = mmap(tmp_header.mapped_addr, buf.st_size, PROT_READ | PROT_WRITE,
                MAP_SHARED | MAP_FIXED, fd, 0);
     if (shm == MAP_FAILED || shm != tmp_header.mapped_addr) {
@@ -116,14 +116,9 @@ patch_type(PyObject *op, void *shift)
 int
 patch_type1(PyObject **opp, void *shift)
 {
-    if (*opp == h->none_addr) {
-        *opp = Py_None;
-    } else if (*opp == h->true_addr) {
-        *opp = Py_True;
-    } else if (*opp == h->false_addr) {
-        *opp = Py_False;
-    } else if (*opp == h->ellipsis_addr) {
-        *opp = Py_Ellipsis;
+    PyObject *op = *opp;
+    if (op == h->none_addr || op == h->true_addr || op == h->false_addr || op == h->ellipsis_addr) {
+        *opp = (PyObject *) ((char *) op + (long) shift);
     } else {
         patch_type(*opp, shift);
     }
