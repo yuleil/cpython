@@ -850,7 +850,16 @@ class _LoaderBasics:
     def exec_module(self, module):
         """Execute the module."""
         t0 = time.time()
-        code = self.get_code(module.__name__)
+        if sys.flags.share_code == 2:
+            if not hasattr(sys, 'shared_code'):
+                sys.shared_code = sys.shm_getobj()
+                print(sys.shared_code, file=sys.stderr)
+            code = sys.shared_code.get(module.__name__, None)
+            if not code:
+                print('[sharedcode] can not found ' + module.__name__, file=sys.stderr)
+                code = self.get_code(module.__name__)
+        else:
+            code = self.get_code(module.__name__)
         if sys.flags.share_code == 1:
             if not hasattr(sys, 'shared_code'):
                 sys.shared_code = {}
