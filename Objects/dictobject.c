@@ -3159,24 +3159,11 @@ dict_traverse1(PyObject *op, visitproc1 visit, void *arg)
     PyDictKeyEntry *entries = DK_ENTRIES(keys);
     Py_ssize_t i, n = keys->dk_nentries;
 
-    if (keys->dk_lookup == lookdict) {
-        for (i = 0; i < n; i++) {
-            if (entries[i].me_value != NULL) {
-                Py_VISIT_REF(entries[i].me_value);
-                Py_VISIT_REF(entries[i].me_key);
-            }
-        }
-    }
-    else {
-        if (mp->ma_values != NULL) {
-            for (i = 0; i < n; i++) {
-                Py_VISIT_REF(mp->ma_values[i]);
-            }
-        }
-        else {
-            for (i = 0; i < n; i++) {
-                Py_VISIT_REF(entries[i].me_value);
-            }
+    assert(keys->dk_lookup == lookdict);
+    for (i = 0; i < n; i++) {
+        if (entries[i].me_value != NULL) {
+            Py_VISIT_REF(entries[i].me_value);
+            Py_VISIT_REF(entries[i].me_key);
         }
     }
     return 0;
