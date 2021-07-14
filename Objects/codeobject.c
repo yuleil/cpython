@@ -280,7 +280,9 @@ _PyCode_Copy(PyObject *from, void *(*alloc)(size_t))
     int n_cellvars = PyTuple_GET_SIZE(fromCo->co_cellvars);
     if (n_cellvars && fromCo->co_cell2arg) {
         cell2arg = alloc(n_cellvars * sizeof(Py_ssize_t));
-        memcpy(cell2arg, fromCo->co_cellvars, n_cellvars * sizeof(Py_ssize_t));
+        for (int i = 0; i < n_cellvars; i++) {
+            cell2arg[i] = fromCo->co_cell2arg[i];
+        }
     }
 
     PyCodeObject *co = (PyCodeObject *) alloc(_PyObject_SIZE(&PyCode_Type));
