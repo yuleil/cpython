@@ -58,11 +58,7 @@ bool_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 static PyObject *
 bool_copy(PyObject *from, void *(*alloc)(size_t))
 {
-    struct _longobject *op = alloc(_PyObject_SIZE(&PyBool_Type));
-    (void) PyObject_INIT(op, &PyBool_Type);
-
-    op->ob_digit[0] = ((struct _longobject *)from)->ob_digit[0];
-    return (PyObject *) op;
+    return from;
 }
 
 /* Arithmetic operations redefined to return bool if both args are bool. */

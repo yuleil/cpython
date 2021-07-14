@@ -44,9 +44,7 @@ ellipsis_reduce(PyObject *op, PyObject *Py_UNUSED(ignored))
 static PyObject *
 ellipsis_copy(PyObject *from, void *(*alloc)(size_t))
 {
-    PyObject *op = alloc(sizeof _Py_EllipsisObject);
-    PyObject_INIT(op, &PyEllipsis_Type);
-    return op;
+    return from;
 }
 
 static PyMethodDef ellipsis_methods[] = {

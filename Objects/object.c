@@ -1586,9 +1586,8 @@ static PyNumberMethods none_as_number = {
 static PyObject *
 _PyNone_copy(PyObject *from, void *(*alloc)(size_t))
 {
-    PyObject *op = alloc(sizeof(PyObject));
-    PyObject_INIT(op, &_PyNone_Type);
-    return op;
+    assert(from == Py_None);
+    return Py_None;
 }
 
 PyTypeObject _PyNone_Type = {

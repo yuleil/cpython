@@ -13,12 +13,16 @@
 
 
 static char *shm;
+struct header *h;
 static size_t offset = 4096;
 static int n_alloc;
 
 struct header {
     void *mapped_addr;
-    void *bytes_type_addr;
+    void *none_addr;
+    void *true_addr;
+    void *false_addr;
+    void *ellipsis_addr;
     PyObject *obj;
 };
 
@@ -47,13 +51,17 @@ _PyMem_CreateSharedMmap(void)
         abort();
     }
     close(fd);
-    struct header *h = (struct header *) shm;
+    h = (struct header *) shm;
     h->mapped_addr = shm;
-    h->bytes_type_addr = &PyBytes_Type;
+    h->none_addr = Py_None;
+    h->true_addr = Py_True;
+    h->false_addr = Py_False;
+    h->ellipsis_addr = Py_Ellipsis;
     return shm;
 }
 
 void patch_obj_header(void);
+
 
 void *
 _PyMem_LoadSharedMmap(void)
@@ -61,21 +69,22 @@ _PyMem_LoadSharedMmap(void)
     int fd = open(IMG_FILE, O_RDWR);
     struct stat buf;
     fstat(fd, &buf);
-    struct header h;
-    if (read(fd, &h, sizeof(h)) != sizeof(h)) {
+    struct header tmp_header;
+    if (read(fd, &tmp_header, sizeof(tmp_header)) != sizeof(tmp_header)) {
         perror("read header");
         abort();
     }
-    printf("[sharedheap] requesting %p...", h.mapped_addr);
+    printf("[sharedheap] requesting %p...", tmp_header.mapped_addr);
     long t0 = nanoTime();
-    shm = mmap(h.mapped_addr, buf.st_size, PROT_READ | PROT_WRITE,
+    shm = mmap(tmp_header.mapped_addr, buf.st_size, PROT_READ | PROT_WRITE,
                MAP_PRIVATE | MAP_FIXED, fd, 0);
-    if (shm == MAP_FAILED || shm != h.mapped_addr) {
+    if (shm == MAP_FAILED || shm != tmp_header.mapped_addr) {
         perror("mmap");
         abort();
     }
     close(fd);
     printf("SUCCESS elapsed=%ld ns\n", nanoTime() - t0);
+    h = (struct header *) shm;
     patch_obj_header();
     return shm;
 }
@@ -88,9 +97,6 @@ int
 patch_type(PyObject *op, void *shift)
 {
     PyTypeObject *type = (PyTypeObject *) ((char *) Py_TYPE(op) + (long) shift);
-//    printf("[sharedheap] fix op%p: %p -> %p", op, Py_TYPE(op), type);
-//    fflush(stdout);
-//    printf("... %s\n", type->tp_name);
     Py_SET_TYPE(op, type);
     if (type->tp_after_patch) {
         type->tp_after_patch(op);
@@ -106,14 +112,16 @@ patch_type(PyObject *op, void *shift)
 int
 patch_type1(PyObject **opp, void *shift)
 {
-    patch_type(*opp, shift);
-    if (Py_TYPE(*opp) == &_PyNone_Type) {
+    if (*opp == h->none_addr) {
         *opp = Py_None;
-    } else if (Py_TYPE(*opp) == &PyBool_Type) {
-        *opp = ((struct _longobject *) *opp)->ob_digit[0] ?
-               Py_True : Py_False;
-    } else if (Py_TYPE(*opp) == &PyEllipsis_Type) {
+    } else if (*opp == h->true_addr) {
+        *opp = Py_True;
+    } else if (*opp == h->false_addr) {
+        *opp = Py_False;
+    } else if (*opp == h->ellipsis_addr) {
         *opp = Py_Ellipsis;
+    } else {
+        patch_type(*opp, shift);
     }
     return 0;
 }
@@ -122,11 +130,10 @@ void
 patch_obj_header(void)
 {
     assert(shm);
-    struct header *h = (struct header *) shm;
-    long shift = (char *) &PyBytes_Type - (char *) h->bytes_type_addr;
+    long shift = (char *) Py_None - (char *) h->none_addr;
     printf("[sharedheap] ASLR data segment shift = %c0x%lx\n", shift < 0 ? '-' : ' ', (shift < 0) ? -shift : shift);
     long t0 = nanoTime();
-    if (h->obj) {
+    if (shift && h->obj) {
         patch_type1(&h->obj, (void *) shift);
     }
     printf("[sharedheap] ASLR fix FINISH, elapsed=%ld ns\n", nanoTime() - t0);
@@ -158,14 +165,12 @@ _PyMem_SharedMoveIn(PyObject *o)
     PyObject *copy = type->tp_copy(o, _PyMem_SharedMalloc);
     assert(_PyMem_IsShared(copy));
     printf("[sharedheap] deep copy a `%s object`@%p to %p\n", Py_TYPE(copy)->tp_name, o, copy);
-    struct header *h = (struct header *) shm;
     h->obj = copy;
 }
 
 PyObject *
 _PyMem_SharedGetObj(void)
 {
-    struct header *h = (struct header *) shm;
     if (!h->obj) return Py_None;
     Py_INCREF(h->obj);
     return h->obj;
