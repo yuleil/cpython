@@ -814,7 +814,7 @@ _PyConfig_Copy(PyConfig *config, const PyConfig *config2)
     COPY_ATTR(malloc_stats);
     COPY_ATTR(sharedheap);
     COPY_ATTR(sharecode);
-
+    COPY_ATTR(verbose2);
 
     COPY_WSTR_ATTR(pycache_prefix);
     COPY_WSTR_ATTR(pythonpath_env);
@@ -1311,6 +1311,7 @@ config_read_env_vars(PyConfig *config)
     _Py_get_env_flag(use_env, &config->verbose, "PYTHONVERBOSE");
     _Py_get_env_flag(use_env, &config->sharedheap, "PYTHONSHAREDHEAP");
     _Py_get_env_flag(use_env, &config->sharecode, "PYTHONSHAREDCODE");
+    _Py_get_env_flag(use_env, &config->verbose2, "PYTHONVERBOSE2");
     if (config->sharecode) {
         config->sharedheap = config->sharecode;
     }

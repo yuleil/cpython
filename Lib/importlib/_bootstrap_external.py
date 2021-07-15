@@ -866,7 +866,7 @@ class _LoaderBasics:
                     atexit.register(lambda: sys.shm_move_in(sys.shared_code))
                 sys.shared_code[module.__name__] = code
 
-        if sys.flags.verbose >= 1: print('[get_code] ' + module.__name__ + ': ' + str((time.time() - t0) * 1000), file=sys.stderr)
+        if sys.flags.verbose2: print('[get_code] ' + module.__name__ + ': ' + str((time.time() - t0) * 1000), file=sys.stderr)
         if code is None:
             raise ImportError('cannot load module {!r} when get_code() '
                               'returns None'.format(module.__name__))
@@ -1431,7 +1431,7 @@ class PathFinder:
             path = sys.path
         t0 = time.time()
         spec = cls._get_spec(fullname, path, target)
-        if sys.flags.verbose >= 1: print('[find_spec] ' + fullname + ': ' + str((time.time() - t0) * 1000), file=sys.stderr)
+        if sys.flags.verbose2: print('[find_spec] ' + fullname + ': ' + str((time.time() - t0) * 1000), file=sys.stderr)
         if spec is None:
             return None
         elif spec.loader is None:

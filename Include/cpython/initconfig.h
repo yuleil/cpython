@@ -303,6 +303,8 @@ typedef struct {
      */
     int sharecode;
 
+    int verbose2;
+
     /* If greater than 0, enable the quiet mode: Don't display the copyright
        and version messages even in interactive mode.
 
