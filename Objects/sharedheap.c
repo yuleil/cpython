@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+#define USING_MMAP 1
 
 static char *shm;
 struct header *h;
@@ -63,6 +64,12 @@ _PyMem_CreateSharedMmap(void)
 
 void patch_obj_header(void);
 
+#ifdef MAP_POPULATE
+#define M_POPULATE MAP_POPULATE
+#else
+#define M_POPULATE 0
+#endif
+
 void *
 _PyMem_LoadSharedMmap(void)
 {
@@ -70,25 +77,37 @@ _PyMem_LoadSharedMmap(void)
     int fd = open(IMG_FILE, O_RDWR);
     struct stat buf;
     fstat(fd, &buf);
-    struct header tmp_header;
-    if (read(fd, &tmp_header, sizeof(tmp_header)) != sizeof(tmp_header)) {
+    struct header hbuf;
+    if (read(fd, &hbuf, sizeof(hbuf)) != sizeof(hbuf)) {
         perror("read header");
         abort();
     }
-    printf("[sharedheap] requesting %p...", tmp_header.mapped_addr);
-    shm = mmap(tmp_header.mapped_addr, buf.st_size, PROT_READ | PROT_WRITE,
-               MAP_SHARED | MAP_FIXED, fd, 0);
-    if (shm == MAP_FAILED || shm != tmp_header.mapped_addr) {
+    printf("[sharedheap] requesting %p...", hbuf.mapped_addr);
+    size_t aligned_size = (hbuf.used + 4095) & ~4095;
+    shm = mmap(hbuf.mapped_addr, aligned_size,
+               PROT_READ | PROT_WRITE,
+               MAP_PRIVATE | MAP_FIXED | (USING_MMAP ? M_POPULATE : MAP_ANONYMOUS),
+               fd, 0);
+    long t1 = nanoTime();
+    if (shm == MAP_FAILED || shm != hbuf.mapped_addr) {
         perror("mmap");
         abort();
     }
-    close(fd);
     h = (struct header *) shm;
-    if (madvise(shm, (h->used + 4095) & ~4095, MADV_WILLNEED) != 0) {
-        perror("madvise");
-        abort();
+    if (USING_MMAP) {
+        for (int i = 0; i < h->used; i += 4096) {
+            ((char volatile *) shm)[i] += 0;
+        }
+    } else {
+        lseek(fd, 0, SEEK_SET);
+        int nread = 0;
+        while (nread < hbuf.used) {
+            nread += read(fd, shm + nread, hbuf.used - nread);
+        }
     }
-    printf("SUCCESS elapsed=%ld ns\n", nanoTime() - t0);
+    close(fd);
+    long t2 = nanoTime();
+    printf("SUCCESS elapsed=%ld ns (%ld + %ld)\n", t2 - t0, t1 - t0, t2 - t1);
     patch_obj_header();
     return shm;
 }
