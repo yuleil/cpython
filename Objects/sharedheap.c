@@ -122,7 +122,7 @@ patch_type(PyObject *op, void *shift)
     PyTypeObject *type = (PyTypeObject *) ((char *) Py_TYPE(op) + (long) shift);
     Py_SET_TYPE(op, type);
     if (type->tp_after_patch) {
-        type->tp_after_patch(op);
+        type->tp_after_patch(op, shift);
     }
     if (type->tp_traverse1) {
         type->tp_traverse1(op, patch_type1, shift);

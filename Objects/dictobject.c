@@ -580,7 +580,7 @@ static PyDictKeysObject *new_keys_object(Py_ssize_t size)
     dk->dk_refcnt = 1;
     dk->dk_size = size;
     dk->dk_usable = usable;
-    dk->dk_lookup = lookdict;
+    dk->dk_lookup = lookdict_unicode_nodummy;
     dk->dk_nentries = 0;
     memset(&dk->dk_indices[0], 0xff, es * size);
     memset(DK_ENTRIES(dk), 0, sizeof(PyDictKeyEntry) * usable);
@@ -3178,7 +3178,6 @@ copy(PyObject *op, void *(*alloc)(size_t))
 
     assert(mp->ma_used);
     assert(!mp->ma_values);
-    assert(keys->dk_lookup == lookdict);
 
     PyDictObject *new_mp = (PyDictObject *) alloc(_PyObject_SIZE(&PyDict_Type));
     PyObject_INIT(new_mp, &PyDict_Type);
@@ -3216,7 +3215,7 @@ copy(PyObject *op, void *(*alloc)(size_t))
     dk->dk_refcnt = 1;
     dk->dk_size = keys->dk_size;
     dk->dk_usable = keys->dk_usable;
-    dk->dk_lookup = lookdict;
+    dk->dk_lookup = keys->dk_lookup;
     dk->dk_nentries = keys->dk_nentries;
     memcpy(&dk->dk_indices[0], &keys->dk_indices, es * size);
     memcpy(DK_ENTRIES(dk), DK_ENTRIES(keys), sizeof(PyDictKeyEntry) * usable);
@@ -3242,10 +3241,10 @@ copy(PyObject *op, void *(*alloc)(size_t))
 }
 
 void
-after_patch(PyObject *op)
+after_patch(PyObject *op, void *shift)
 {
     PyDictObject *mp = (PyDictObject *)op;
-    mp->ma_keys->dk_lookup = lookdict;
+    mp->ma_keys->dk_lookup = (dict_lookup_func)((char *) mp->ma_keys->dk_lookup + (long) shift);
 }
 
 static int

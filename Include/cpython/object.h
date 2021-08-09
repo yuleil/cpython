@@ -272,7 +272,7 @@ struct _typeobject {
     destructor tp_finalize;
     vectorcallfunc tp_vectorcall;
     copyfunc tp_copy;
-    destructor tp_after_patch;
+    patchfunc tp_after_patch;
     traverseproc1 tp_traverse1;
 };
 
