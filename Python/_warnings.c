@@ -53,9 +53,10 @@ warnings_clear_state(WarningsState *st)
 
 #ifndef Py_DEBUG
 static PyObject *
-create_filter(PyObject *category, _Py_Identifier *id, const char *modname)
+create_filter_with_message(PyObject *category, _Py_Identifier *id, const char *modname, const char *msg)
 {
     PyObject *modname_obj = NULL;
+    PyObject *msg_obj = NULL;
     PyObject *action_str = _PyUnicode_FromId(id);
     if (action_str == NULL) {
         return NULL;
@@ -71,12 +72,28 @@ create_filter(PyObject *category, _Py_Identifier *id, const char *modname)
         modname_obj = Py_None;
         Py_INCREF(modname_obj);
     }
+    if (msg != NULL) {
+        msg_obj = PyUnicode_InternFromString(msg);
+        if (msg_obj == NULL) {
+            return NULL;
+        }
+    } else {
+        msg_obj = Py_None;
+        Py_INCREF(msg_obj);
+    }
 
     /* This assumes the line number is zero for now. */
-    PyObject *filter = PyTuple_Pack(5, action_str, Py_None,
+    PyObject *filter = PyTuple_Pack(5, action_str, msg_obj,
                                     category, modname_obj, _PyLong_Zero);
     Py_DECREF(modname_obj);
+    Py_DECREF(msg_obj);
     return filter;
+}
+
+static PyObject *
+create_filter(PyObject *category, _Py_Identifier *id, const char *modname)
+{
+    return create_filter_with_message(category, id, modname, NULL);
 }
 #endif
 
@@ -88,7 +105,7 @@ init_filters(void)
     return PyList_New(0);
 #else
     /* Other builds ignore a number of warning categories by default */
-    PyObject *filters = PyList_New(5);
+    PyObject *filters = PyList_New(6);
     if (filters == NULL) {
         return NULL;
     }
@@ -104,6 +121,14 @@ init_filters(void)
                     create_filter(PyExc_ImportWarning, &PyId_ignore, NULL));
     PyList_SET_ITEM(filters, pos++,
                     create_filter(PyExc_ResourceWarning, &PyId_ignore, NULL));
+#if SIZEOF_VOID_P == 8
+    PyList_SET_ITEM(filters, pos++,
+                    create_filter_with_message(PyExc_RuntimeWarning, &PyId_ignore, NULL,
+                                               /* string matches exactly (see below `check_matched`) */
+                                               "builtins.type size changed, may indicate binary incompatibility. Expected 880 from C header, got 904 from PyObject"));
+#else
+#warning "CDS warnings will not be suppressed."
+#endif
 
     for (size_t x = 0; x < pos; x++) {
         if (PyList_GET_ITEM(filters, x) == NULL) {

@@ -271,6 +271,8 @@ struct _typeobject {
 
     destructor tp_finalize;
     vectorcallfunc tp_vectorcall;
+
+    /* CDS fields will change size of `builtins.type`, suppress warning in _warnings.c */
     copyfunc tp_copy;
     patchfunc tp_after_patch;
     traverseproc1 tp_traverse1;
