@@ -745,6 +745,8 @@ done:
     return status;
 }
 
+void *_PyMem_CreateSharedMmap(wchar_t *);
+void *_PyMem_LoadSharedMmap(wchar_t *);
 
 static PyStatus
 pyinit_config(_PyRuntimeState *runtime,
@@ -768,12 +770,12 @@ pyinit_config(_PyRuntimeState *runtime,
         return status;
     }
 
-    void *_PyMem_CreateSharedMmap(void);
-    void *_PyMem_LoadSharedMmap(void);
-    if (config->sharedheap == 1) {
-        _PyMem_CreateSharedMmap();
-    } else if (config->sharedheap == 2) {
-        _PyMem_LoadSharedMmap();
+    if (config->cds_mode == 1) {
+        _PyMem_CreateSharedMmap(config->cds_archive);
+    } else if (config->cds_mode == 2) {
+        _PyMem_LoadSharedMmap(config->cds_archive);
+    } else if (config->cds_mode > 0) {
+        // reserved
     }
 
     /* Only when we get here is the runtime core fully initialized */

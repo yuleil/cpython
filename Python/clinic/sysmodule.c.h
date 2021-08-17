@@ -244,6 +244,9 @@ exit:
 #define SYS_SHM_MOVE_IN_METHODDEF    \
     {"shm_move_in", (PyCFunction)sys_shm_move_in, METH_O, "tbd"},
 
+void _PyMem_SharedMoveIn(PyObject *o);
+PyObject *_PyMem_SharedGetObj(void);
+
 static PyObject *
 sys_shm_move_in(PyObject *module, PyObject *arg)
 {
@@ -252,7 +255,6 @@ sys_shm_move_in(PyObject *module, PyObject *arg)
         return NULL;
     }
 
-    void _PyMem_SharedMoveIn(PyObject *o);
     _PyMem_SharedMoveIn(arg);
 
     return Py_None;
@@ -264,7 +266,6 @@ sys_shm_move_in(PyObject *module, PyObject *arg)
 static PyObject *
 sys_shm_getobj(PyObject *module)
 {
-    PyObject *_PyMem_SharedGetObj(void);
     return _PyMem_SharedGetObj();
 }
 

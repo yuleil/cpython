@@ -1,4 +1,3 @@
-#define IMG_FILE "heap.img"
 #define IMG_SIZE (1024 * 1024 * 1024)
 #define REQUESTING_ADDR ((void* )0x280000000L)
 
@@ -36,9 +35,9 @@ nanoTime()
 }
 
 void *
-_PyMem_CreateSharedMmap(void)
+_PyMem_CreateSharedMmap(wchar_t *const archive)
 {
-    int fd = open(IMG_FILE, O_RDWR | O_CREAT | O_TRUNC, 0666);
+    int fd = open(Py_EncodeLocale(archive, NULL), O_RDWR | O_CREAT | O_TRUNC, 0666);
     if (fd < 0) {
         perror("open");
         exit(-1);
@@ -71,10 +70,14 @@ void patch_obj_header(void);
 #endif
 
 void *
-_PyMem_LoadSharedMmap(void)
+_PyMem_LoadSharedMmap(wchar_t *const archive)
 {
     long t0 = nanoTime();
-    int fd = open(IMG_FILE, O_RDWR);
+    char *local_archive = Py_EncodeLocale(archive, NULL);
+    if (local_archive == NULL) {
+        // todo: error handling
+    }
+    int fd = open(local_archive, O_RDWR);
     struct stat buf;
     fstat(fd, &buf);
     struct header hbuf;
@@ -185,6 +188,7 @@ _PyMem_SharedMoveIn(PyObject *o)
 {
     PyTypeObject *type = Py_TYPE(o);
     assert(type->tp_copy);
+    assert(!h->obj);
     PyObject *copy = type->tp_copy(o, _PyMem_SharedMalloc);
     assert(_PyMem_IsShared(copy));
     printf("[sharedheap] deep copy a `%s object`@%p to %p\n", Py_TYPE(copy)->tp_name, o, copy);

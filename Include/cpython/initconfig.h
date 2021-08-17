@@ -294,16 +294,19 @@ typedef struct {
        variable. If set to -1 (default), inherit Py_VerboseFlag value. */
     int verbose;
 
-    int sharedheap;
-
     /*
      * 0: disable
      * 1: dump
      * 2: share
+     * 3: auto
      */
-    int sharecode;
+    int cds_mode;
 
-    int verbose2;
+    /* file name of heap archive */
+    wchar_t *cds_archive;
+
+    /* {0, 1, 2} */
+    int cds_verbose;
 
     /* If greater than 0, enable the quiet mode: Don't display the copyright
        and version messages even in interactive mode.
