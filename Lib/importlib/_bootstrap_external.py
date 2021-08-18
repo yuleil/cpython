@@ -26,6 +26,7 @@ import sys
 import _warnings
 import marshal
 import time
+import atexit
 
 
 _MS_WINDOWS = (sys.platform == 'win32')
@@ -850,23 +851,22 @@ class _LoaderBasics:
     def exec_module(self, module):
         """Execute the module."""
         t0 = time.time()
-        if sys.flags.share_code == 2:
+        code = None
+        if sys.flags.cds_mode == 2:
             if not hasattr(sys, 'shared_code'):
                 sys.shared_code = sys.shm_getobj()
             code = sys.shared_code.get(module.__name__, None)
             if not code:
                 print('[sharedcode] can not found ' + module.__name__, file=sys.stderr)
-                code = self.get_code(module.__name__)
-        else:
+
+        if code is None:
             code = self.get_code(module.__name__)
-            if sys.flags.share_code == 1:
+            if sys.flags.cds_mode == 1:
                 if not hasattr(sys, 'shared_code'):
                     sys.shared_code = {}
-                    import atexit
-                    atexit.register(lambda: sys.shm_move_in(sys.shared_code))
                 sys.shared_code[module.__name__] = code
 
-        if sys.flags.verbose2: print('[get_code] ' + module.__name__ + ': ' + str((time.time() - t0) * 1000), file=sys.stderr)
+        if sys.flags.cds_verbose: print('[get_code] ' + module.__name__ + ': ' + str((time.time() - t0) * 1000), file=sys.stderr)
         if code is None:
             raise ImportError('cannot load module {!r} when get_code() '
                               'returns None'.format(module.__name__))
@@ -875,6 +875,16 @@ class _LoaderBasics:
     def load_module(self, fullname):
         """This module is deprecated."""
         return _bootstrap._load_module_shim(self, fullname)
+
+
+def shm_hook():
+    if sys.flags.cds_mode == 1:
+        shared_code = getattr(sys, 'shared_code', None)
+        if shared_code is not None:
+            sys.shm_move_in(shared_code)
+
+
+atexit.register(shm_hook)
 
 
 class SourceLoader(_LoaderBasics):
@@ -1431,7 +1441,7 @@ class PathFinder:
             path = sys.path
         t0 = time.time()
         spec = cls._get_spec(fullname, path, target)
-        if sys.flags.verbose2: print('[find_spec] ' + fullname + ': ' + str((time.time() - t0) * 1000), file=sys.stderr)
+        if sys.flags.cds_verbose: print('[find_spec] ' + fullname + ': ' + str((time.time() - t0) * 1000), file=sys.stderr)
         if spec is None:
             return None
         elif spec.loader is None:
