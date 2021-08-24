@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 
+#include "sharedheap.h"
 
 /* Defined in tracemalloc.c */
 extern void _PyMem_DumpTraceback(int fd, const void *ptr);
@@ -80,7 +81,6 @@ static void _PyObject_Free(void *ctx, void *p);
 static void* _PyObject_Realloc(void *ctx, void *ptr, size_t size);
 #endif
 
-int _PyMem_IsShared(void *ptr);
 
 /* bpo-35053: Declare tracemalloc configuration here rather than
    Modules/_tracemalloc.c because _tracemalloc can be compiled as dynamic

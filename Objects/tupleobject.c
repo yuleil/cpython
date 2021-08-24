@@ -654,7 +654,7 @@ _PyTuple_Deserialize(void *p, long shift)
     for (Py_ssize_t i = Py_SIZE(op); --i >= 0;)
         op->ob_item[i] = deserialize((void *)op->ob_item[i], shift);
     Py_INCREF(op);
-    return op;
+    return (PyObject *)op;
 }
 
 static PyObject *

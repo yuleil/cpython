@@ -34,4 +34,6 @@ _PyMem_SharedMoveIn(PyObject *o);
 PyObject *
 _PyMem_SharedGetObj(void);
 
+int _PyMem_IsShared(void *ptr);
+
 #endif  // CPYTHON_INCLUDE_SHAREDHEAP_H_

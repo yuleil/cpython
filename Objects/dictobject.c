@@ -537,6 +537,7 @@ _PyDict_CheckConsistency(PyObject *op, int check_content)
 #undef CHECK
 }
 
+
 static PyDictKeysObject *new_keys_object(Py_ssize_t size)
 {
     PyDictKeysObject *dk;

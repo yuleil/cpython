@@ -131,7 +131,7 @@ gc_decref(PyGC_Head *g)
 void
 _PyGC_InitState(GCState *gcstate)
 {
-    gcstate->enabled = 0; /* automatic collection enabled? */
+    gcstate->enabled = 1; /* automatic collection enabled? */
 
 #define _GEN_HEAD(n) GEN_HEAD(gcstate, n)
     struct gc_generation generations[NUM_GENERATIONS] = {
@@ -1181,7 +1181,6 @@ collect(PyThreadState *tstate, int generation,
     _PyTime_t t1 = 0;   /* initialize to prevent a compiler warning */
     GCState *gcstate = &tstate->interp->gc;
 
-    if (!gcstate->enabled) return 0;
     if (gcstate->debug & DEBUG_STATS) {
         PySys_WriteStderr("gc: collecting generation %d...\n", generation);
         show_stats_each_generations(gcstate);
