@@ -445,6 +445,9 @@ static int test_init_global_config(void)
     putenv("PYTHONVERBOSE=0");
     Py_VerboseFlag = 1;
 
+    putenv("PYCDSVERBOSE=0");
+    Py_CDSVerboseFlag = 1;
+
     Py_QuietFlag = 1;
     Py_NoUserSiteDirectory = 1;
 
@@ -559,6 +562,10 @@ static int test_init_from_config(void)
     Py_VerboseFlag = 0;
     config.verbose = 1;
 
+    putenv("PYCDSVERBOSE=0");
+    Py_CDSVerboseFlag = 0;
+    config.cds_verbose = 1;
+
     Py_NoSiteFlag = 0;
     config.site_import = 0;
 
@@ -666,6 +673,7 @@ static void set_most_env_vars(void)
     putenv("PYTHONMALLOCSTATS=1");
     putenv("PYTHONUTF8=1");
     putenv("PYTHONVERBOSE=1");
+    putenv("PYCDSVERBOSE=1");
     putenv("PYTHONINSPECT=1");
     putenv("PYTHONOPTIMIZE=2");
     putenv("PYTHONDONTWRITEBYTECODE=1");
@@ -891,6 +899,7 @@ static void set_all_global_config_variables(void)
     Py_OptimizeFlag = 1;
     Py_DebugFlag = 1;
     Py_VerboseFlag = 1;
+    Py_CDSVerboseFlag = 1;
     Py_QuietFlag = 1;
     Py_FrozenFlag = 0;
     Py_UnbufferedStdioFlag = 1;

@@ -1,5 +1,6 @@
 import os
 
+from test.support import load_package_tests
 from test.support.script_helper import assert_python_ok
 
 import typing as t
@@ -38,3 +39,7 @@ class CdsTestMixin(UtilMixin):
         env['PYCDSVERBOSE'] = str(verbose)
 
         return env
+
+
+def load_tests(*args):
+    return load_package_tests(os.path.dirname(__file__), *args)

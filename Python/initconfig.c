@@ -209,6 +209,7 @@ _Py_GetGlobalVariablesAsDict(void)
     SET_ITEM_INT(Py_UTF8Mode);
     SET_ITEM_INT(Py_DebugFlag);
     SET_ITEM_INT(Py_VerboseFlag);
+    SET_ITEM_INT(Py_CDSVerboseFlag);
     SET_ITEM_INT(Py_QuietFlag);
     SET_ITEM_INT(Py_InteractiveFlag);
     SET_ITEM_INT(Py_InspectFlag);
@@ -223,7 +224,6 @@ _Py_GetGlobalVariablesAsDict(void)
     SET_ITEM_INT(Py_UnbufferedStdioFlag);
     SET_ITEM_INT(Py_HashRandomizationFlag);
     SET_ITEM_INT(Py_IsolatedFlag);
-    SET_ITEM_INT(Py_CDSVerboseFlag);
 
 #ifdef MS_WINDOWS
     SET_ITEM_INT(Py_LegacyWindowsFSEncodingFlag);
@@ -633,6 +633,7 @@ _PyConfig_InitCompatConfig(PyConfig *config)
     config->parser_debug= -1;
     config->write_bytecode = -1;
     config->verbose = -1;
+    config->cds_verbose = -1;
     config->quiet = -1;
     config->user_site_directory = -1;
     config->configure_c_stdio = 0;
@@ -664,6 +665,7 @@ config_init_defaults(PyConfig *config)
     config->parser_debug= 0;
     config->write_bytecode = 1;
     config->verbose = 0;
+    config->cds_verbose = 0;
     config->quiet = 0;
     config->user_site_directory = 1;
     config->buffered_stdio = 1;
@@ -950,6 +952,7 @@ config_as_dict(const PyConfig *config)
     SET_ITEM_INT(parser_debug);
     SET_ITEM_INT(write_bytecode);
     SET_ITEM_INT(verbose);
+    SET_ITEM_INT(cds_verbose);
     SET_ITEM_INT(quiet);
     SET_ITEM_INT(user_site_directory);
     SET_ITEM_INT(configure_c_stdio);
@@ -1097,7 +1100,7 @@ config_set_global_vars(const PyConfig *config)
     COPY_FLAG(parser_debug, Py_DebugFlag);
     COPY_FLAG(verbose, Py_VerboseFlag);
     COPY_FLAG(quiet, Py_QuietFlag);
-    COPY_FLAG(cds_verbose, Py_VerboseFlag);
+    COPY_FLAG(cds_verbose, Py_CDSVerboseFlag);
 #ifdef MS_WINDOWS
     COPY_FLAG(legacy_windows_stdio, Py_LegacyWindowsStdioFlag);
 #endif
@@ -1316,15 +1319,16 @@ config_read_env_vars(PyConfig *config)
     _Py_get_env_flag(use_env, &config->verbose, "PYTHONVERBOSE");
 
     _Py_get_env_flag(use_env, &config->cds_mode, "PYCDSMODE");
+    _Py_get_env_flag(use_env, &config->cds_verbose, "PYCDSVERBOSE");
+    config->cds_archive = NULL;
+    status = CONFIG_GET_ENV_DUP(config, &config->cds_archive,
+                                L"PYCDSARCHIVE", "PYCDSARCHIVE");
     if (config->cds_mode != 0) {
-        _Py_get_env_flag(use_env, &config->cds_verbose, "PYCDSVERBOSE");
-        config->cds_archive = NULL;
-        status = CONFIG_GET_ENV_DUP(config, &config->cds_archive,
-                               L"PYCDSARCHIVE", "PYCDSARCHIVE");
-        if (_PyStatus_EXCEPTION(status)) {
+        if (_PyStatus_EXCEPTION(status))
             return status;
+        else {
+            // todo: check valid file name
         }
-        // todo: check valid file name
     }
 
     _Py_get_env_flag(use_env, &config->optimization_level, "PYTHONOPTIMIZE");
