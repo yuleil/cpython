@@ -964,37 +964,6 @@ make_new_set(PyTypeObject *type, PyObject *iterable)
 }
 
 static PyObject *
-copy_set(PyObject *from, void *(*alloc)(size_t))
-{
-    assert(PyAnySet_CheckExact(from));
-    PySetObject *from_set = (PySetObject *) from;
-    assert(!from_set->weakreflist);
-    size_t size = _PyObject_SIZE(Py_TYPE(from));
-    PySetObject *op = alloc(size);
-    PyObject_INIT(op, Py_TYPE(from));
-    op->used = from_set->used;
-    op->mask = from_set-> mask;
-    op->fill = from_set->fill;
-    op->hash = from_set->hash;
-    op->finger = from_set->finger;
-    if (from_set->smalltable == from_set->table) {
-        op->table = op->smalltable;
-    } else {
-        op->table = alloc(sizeof(setentry) * (from_set->mask + 1));
-        memset(op->table, 0, sizeof(setentry) * (from_set->mask + 1));
-    }
-    for (int i = 0; i <= from_set->mask; i++) {
-        PyObject *k = from_set->table[i].key;
-        if (k) {
-            assert(Py_TYPE(k)->tp_copy);
-            op->table[i].key = Py_TYPE(k)->tp_copy(k, alloc);
-            op->table[i].hash = from_set->table[i].hash;
-        }
-    }
-    return (PyObject *) op;
-}
-
-static PyObject *
 make_new_set_basetype(PyTypeObject *type, PyObject *iterable)
 {
     if (type != &PySet_Type && type != &PyFrozenSet_Type) {
@@ -2162,7 +2131,6 @@ PyTypeObject PySet_Type = {
     set_new,                            /* tp_new */
     PyObject_GC_Del,                    /* tp_free */
     .tp_vectorcall = set_vectorcall,
-    .tp_copy = copy_set,
 };
 
 /* frozenset object ********************************************************/
@@ -2263,7 +2231,6 @@ PyTypeObject PyFrozenSet_Type = {
     frozenset_new,                      /* tp_new */
     PyObject_GC_Del,                    /* tp_free */
     .tp_vectorcall = frozenset_vectorcall,
-    .tp_copy = copy_set,
 };
 
 

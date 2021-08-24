@@ -10,6 +10,8 @@
 #include "pycore_tupleobject.h"
 #include "clinic/codeobject.c.h"
 
+#include "sharedheap.h"
+
 /* Holder for co_extra information */
 typedef struct {
     Py_ssize_t ce_size;
@@ -271,10 +273,10 @@ PyCode_NewWithPosOnlyArgs(int argcount, int posonlyargcount, int kwonlyargcount,
     return co;
 }
 
-PyObject *
-_PyCode_Copy(PyObject *from, void *(*alloc)(size_t))
+void *
+_PyCode_Serialize(PyObject *src0, void *(*alloc)(size_t))
 {
-    PyCodeObject *fromCo = (PyCodeObject *)from;
+    PyCodeObject *fromCo = (PyCodeObject *)src0;
 
     Py_ssize_t *cell2arg = NULL;
     int n_cellvars = PyTuple_GET_SIZE(fromCo->co_cellvars);
@@ -285,14 +287,16 @@ _PyCode_Copy(PyObject *from, void *(*alloc)(size_t))
         }
     }
 
-    PyCodeObject *co = (PyCodeObject *) alloc(_PyObject_SIZE(&PyCode_Type));
+    PyCodeObject *co = (PyCodeObject *)alloc(_PyObject_SIZE(&PyCode_Type));
     PyObject_INIT(co, &PyCode_Type);
 
-#define COPY_FIELD(field) do { \
-    PyTypeObject *type = Py_TYPE(fromCo->field); \
-    assert(type->tp_copy);     \
-    co->field = type->tp_copy(fromCo->field, alloc);\
-} while (0)
+
+    // Force converting HeapArchivedObject* (to void*) to PyObject*,
+    // this doesn't feel very right but works so far.
+#define SERIALIZE_CAST_FIELD(field)                          \
+    do {                                                     \
+        co->field = (void *)serialize(fromCo->field, alloc); \
+    } while (0)
 
     co->co_argcount = fromCo->co_argcount;
     co->co_posonlyargcount = fromCo->co_posonlyargcount;
@@ -301,16 +305,16 @@ _PyCode_Copy(PyObject *from, void *(*alloc)(size_t))
     co->co_stacksize = fromCo->co_stacksize;
     co->co_flags = fromCo->co_flags;
     co->co_firstlineno = fromCo->co_firstlineno;
-    COPY_FIELD(co_code);
-    COPY_FIELD(co_consts);
-    COPY_FIELD(co_names);
-    COPY_FIELD(co_varnames);
-    COPY_FIELD(co_freevars);
-    COPY_FIELD(co_cellvars);
+    SERIALIZE_CAST_FIELD(co_code);
+    SERIALIZE_CAST_FIELD(co_consts);
+    SERIALIZE_CAST_FIELD(co_names);
+    SERIALIZE_CAST_FIELD(co_varnames);
+    SERIALIZE_CAST_FIELD(co_freevars);
+    SERIALIZE_CAST_FIELD(co_cellvars);
     co->co_cell2arg = cell2arg;
-    COPY_FIELD(co_name);
-    COPY_FIELD(co_filename);
-    COPY_FIELD(co_lnotab);
+    SERIALIZE_CAST_FIELD(co_name);
+    SERIALIZE_CAST_FIELD(co_filename);
+    SERIALIZE_CAST_FIELD(co_lnotab);
     co->co_zombieframe = NULL;
     co->co_weakreflist = NULL;
     co->co_extra = NULL;
@@ -318,24 +322,35 @@ _PyCode_Copy(PyObject *from, void *(*alloc)(size_t))
     co->co_opcache = NULL;
     co->co_opcache_flag = 0;
     co->co_opcache_size = 0;
+#undef SERIALIZE_CAST_FIELD
 
-    return (PyObject *) co;
+    return (PyObject *)co;
 }
 
-static int
-code_traverse1(PyObject *op, visitproc1 visit, void *arg)
+PyObject *
+_PyCode_Deserialize(void *p, long shift)
 {
-    PyCodeObject *co = (PyCodeObject *)op;
-    Py_VISIT_REF(co->co_code);
-    Py_VISIT_REF(co->co_consts);
-    Py_VISIT_REF(co->co_names);
-    Py_VISIT_REF(co->co_varnames);
-    Py_VISIT_REF(co->co_freevars);
-    Py_VISIT_REF(co->co_cellvars);
-    Py_VISIT_REF(co->co_name);
-    Py_VISIT_REF(co->co_filename);
-    Py_VISIT_REF(co->co_lnotab);
-    return 0;
+    PyCodeObject *co = (PyCodeObject *)p;
+    Py_TYPE(co) = &PyCode_Type;
+
+#define DESERIALIZE_CAST_FIELD(field)                     \
+    do {                                                  \
+        co->field = deserialize((void*)co->field, shift); \
+    } while (0)
+    DESERIALIZE_CAST_FIELD(co_code);
+    DESERIALIZE_CAST_FIELD(co_consts);
+    DESERIALIZE_CAST_FIELD(co_names);
+    DESERIALIZE_CAST_FIELD(co_varnames);
+    DESERIALIZE_CAST_FIELD(co_freevars);
+    DESERIALIZE_CAST_FIELD(co_cellvars);
+    DESERIALIZE_CAST_FIELD(co_name);
+    DESERIALIZE_CAST_FIELD(co_filename);
+    DESERIALIZE_CAST_FIELD(co_lnotab);
+#undef DESERIALIZE_CAST_FIELD
+
+    Py_INCREF(co);
+
+    return (PyObject *)co;
 }
 
 PyCodeObject *
@@ -1048,8 +1063,8 @@ PyTypeObject PyCode_Type = {
     0,                                  /* tp_init */
     0,                                  /* tp_alloc */
     code_new,                           /* tp_new */
-    .tp_copy = _PyCode_Copy,
-    .tp_traverse1 = code_traverse1,
+    .tp_archive_serialize = _PyCode_Serialize,
+    .tp_archive_deserialize = _PyCode_Deserialize,
 };
 
 /* Use co_lnotab to compute the line number from a bytecode index, addrq.  See

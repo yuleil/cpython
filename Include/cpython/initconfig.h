@@ -296,9 +296,12 @@ typedef struct {
 
     /*
      * 0: disable
-     * 1: dump
-     * 2: share
-     * 3: auto
+     * 1: dump code
+     * 2: share code
+     * 4: auto CDS
+     * (for debug and test only)
+     * 9 (1 << 3 & 1): dump manually
+     * 10 (1 << 3 & 2): share manually
      */
     int cds_mode;
 

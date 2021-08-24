@@ -866,7 +866,8 @@ class _LoaderBasics:
                     sys.shared_code = {}
                 sys.shared_code[module.__name__] = code
 
-        if sys.flags.cds_verbose: print('[get_code] ' + module.__name__ + ': ' + str((time.time() - t0) * 1000), file=sys.stderr)
+        if sys.flags.cds_verbose >= 2:
+            print('[get_code] ' + module.__name__ + ': ' + str((time.time() - t0) * 1000), file=sys.stderr)
         if code is None:
             raise ImportError('cannot load module {!r} when get_code() '
                               'returns None'.format(module.__name__))
@@ -877,14 +878,14 @@ class _LoaderBasics:
         return _bootstrap._load_module_shim(self, fullname)
 
 
-def shm_hook():
-    if sys.flags.cds_mode == 1:
+if sys.flags.cds_mode == 1:
+    def shm_hook():
         shared_code = getattr(sys, 'shared_code', None)
         if shared_code is not None:
             sys.shm_move_in(shared_code)
 
 
-atexit.register(shm_hook)
+    atexit.register(shm_hook)
 
 
 class SourceLoader(_LoaderBasics):
@@ -1441,7 +1442,8 @@ class PathFinder:
             path = sys.path
         t0 = time.time()
         spec = cls._get_spec(fullname, path, target)
-        if sys.flags.cds_verbose: print('[find_spec] ' + fullname + ': ' + str((time.time() - t0) * 1000), file=sys.stderr)
+        if sys.flags.cds_verbose >= 2:
+            print('[find_spec]' + fullname + ': ' + str((time.time() - t0) * 1000), file=sys.stderr)
         if spec is None:
             return None
         elif spec.loader is None:

@@ -1583,10 +1583,16 @@ static PyNumberMethods none_as_number = {
     0,                          /* nb_index */
 };
 
-static PyObject *
-_PyNone_copy(PyObject *from, void *(*alloc)(size_t))
+void *
+_PyNone_Serialize(PyObject *src0, void *(*alloc)(size_t))
 {
-    assert(from == Py_None);
+    return (void *)NULL;
+}
+
+PyObject *
+_PyNone_Deserialize(void *p, long shift)
+{
+    Py_INCREF(Py_None);
     return Py_None;
 }
 
@@ -1629,7 +1635,8 @@ PyTypeObject _PyNone_Type = {
     0,                  /*tp_init */
     0,                  /*tp_alloc */
     none_new,           /*tp_new */
-    .tp_copy = _PyNone_copy,
+    .tp_archive_serialize = _PyNone_Serialize,
+    .tp_archive_deserialize = _PyNone_Deserialize,
 };
 
 PyObject _Py_NoneStruct = {

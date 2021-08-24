@@ -127,3 +127,4 @@ Tools/ssl/win32
 
 cmake-build-debug/
 heap.img
+venv/

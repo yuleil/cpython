@@ -183,6 +183,35 @@ _PyBytes_Copy(PyObject *from, void *(*alloc)(size_t))
     return (PyObject *)op;
 }
 
+
+void *
+_PyBytes_Serialize(PyObject *src0, void *(*alloc)(size_t))
+{
+    if (!PyBytes_Check(src0)) {
+        PyErr_Format(PyExc_TypeError,
+                     "expected bytes, %.200s found", Py_TYPE(src0)->tp_name);
+        return NULL;
+    }
+    Py_ssize_t sz = Py_SIZE(src0);
+    PyBytesObject *fromOp = (PyBytesObject *)src0;
+
+    PyBytesObject *op = (PyBytesObject *)alloc(PyBytesObject_SIZE + sz);
+    (void)PyObject_INIT_VAR(op, &PyBytes_Type, sz);
+    op->ob_shash = -1;
+    memcpy(op->ob_sval, fromOp->ob_sval, sz+1);
+
+    return (PyObject *)op;
+}
+
+PyObject *
+_PyBytes_Deserialize(void *p, long shift)
+{
+    PyObject *r = (PyObject *)p;
+    Py_TYPE(r) = &PyBytes_Type;
+    Py_INCREF(r);
+    return r;
+}
+
 PyObject *
 PyBytes_FromFormatV(const char *format, va_list vargs)
 {
@@ -2942,7 +2971,8 @@ PyTypeObject PyBytes_Type = {
     0,                                          /* tp_alloc */
     bytes_new,                                  /* tp_new */
     PyObject_Del,                               /* tp_free */
-    .tp_copy = _PyBytes_Copy,
+    .tp_archive_serialize = _PyBytes_Serialize,
+    .tp_archive_deserialize = _PyBytes_Deserialize,
 };
 
 void

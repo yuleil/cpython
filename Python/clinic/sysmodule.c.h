@@ -244,14 +244,13 @@ exit:
 #define SYS_SHM_MOVE_IN_METHODDEF    \
     {"shm_move_in", (PyCFunction)sys_shm_move_in, METH_O, "tbd"},
 
-void _PyMem_SharedMoveIn(PyObject *o);
-PyObject *_PyMem_SharedGetObj(void);
+#include "sharedheap.h"
 
 static PyObject *
 sys_shm_move_in(PyObject *module, PyObject *arg)
 {
-    if (!Py_TYPE(arg)->tp_copy) {
-        _PyArg_BadArgument("move_in", "argument", "copyable", arg);
+    if (!Py_TYPE(arg)->tp_archive_serialize) {
+        _PyArg_BadArgument("move_in", "argument", "serializable", arg);
         return NULL;
     }
 

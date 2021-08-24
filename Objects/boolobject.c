@@ -55,10 +55,28 @@ bool_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     return PyBool_FromLong(ok);
 }
 
-static PyObject *
-bool_copy(PyObject *from, void *(*alloc)(size_t))
+void *
+_PyBool_Serialize(PyObject *src0, void *(*alloc)(size_t))
 {
-    return from;
+    assert(src0 == Py_True || src0 == Py_False);
+    PyObject **r = alloc(sizeof(PyObject *));
+    (*r) = src0;
+    return (void *)r;
+}
+
+PyObject *
+_PyBool_Deserialize(void *p, long shift)
+{
+    PyObject **r = (PyObject **)p;
+    if ((void *)(*r) + shift == Py_True) {
+        return Py_True;
+    }
+    else if ((void *)(*r) + shift == Py_False) {
+        return Py_False;
+    }
+    else {
+        assert(0);  // should not reach here
+    }
 }
 
 /* Arithmetic operations redefined to return bool if both args are bool. */
@@ -176,7 +194,8 @@ PyTypeObject PyBool_Type = {
     0,                                          /* tp_init */
     0,                                          /* tp_alloc */
     bool_new,                                   /* tp_new */
-    .tp_copy = bool_copy,
+    .tp_archive_serialize = _PyBool_Serialize,
+    .tp_archive_deserialize = _PyBool_Deserialize,
 };
 
 /* The objects representing bool values False and True */

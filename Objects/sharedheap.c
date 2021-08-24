@@ -1,30 +1,32 @@
 #define IMG_SIZE (1024 * 1024 * 1024)
-#define REQUESTING_ADDR ((void* )0x280000000L)
+#define REQUESTING_ADDR ((void *)0x280000000L)
 
-#include "Python.h"
+#include "sharedheap.h"
 
 #include <fcntl.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <stdlib.h>
-#include <stdio.h>
 
 #define USING_MMAP 1
 
 static char *shm;
-struct header *h;
+struct HeapArchiveHeader *h;
 static int n_alloc;
+static long shift;
 
-struct header {
-    void *mapped_addr;
-    void *none_addr;
-    void *true_addr;
-    void *false_addr;
-    void *ellipsis_addr;
-    size_t used;
-    PyObject *obj;
-};
+const unsigned int DUMP_FLAG = 1 << 0;
+const unsigned int LOAD_FLAG = 1 << 1;
+const unsigned int AUTO_FLAG = 1 << 2;
+const unsigned int DEBUG_MASK = 1 << 3;
+const unsigned int DEBUG_DUMP_FLAG = DEBUG_MASK | DUMP_FLAG;
+const unsigned int DEBUG_LOAD_FLAG = DEBUG_MASK | LOAD_FLAG;
+
+struct HeapArchivedObject;
+
+struct HeapArchiveHeader;
 
 static inline long
 nanoTime()
@@ -37,21 +39,22 @@ nanoTime()
 void *
 _PyMem_CreateSharedMmap(wchar_t *const archive)
 {
-    int fd = open(Py_EncodeLocale(archive, NULL), O_RDWR | O_CREAT | O_TRUNC, 0666);
+    int fd =
+        open(Py_EncodeLocale(archive, NULL), O_RDWR | O_CREAT | O_TRUNC, 0666);
     if (fd < 0) {
         perror("open");
         exit(-1);
     }
     ftruncate(fd, IMG_SIZE);
 
-    shm = mmap(REQUESTING_ADDR, IMG_SIZE, PROT_READ | PROT_WRITE,
-               MAP_SHARED, fd, 0);
+    shm = mmap(REQUESTING_ADDR, IMG_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED,
+               fd, 0);
     if (shm == MAP_FAILED) {
         perror("mmap");
         abort();
     }
     close(fd);
-    h = (struct header *) shm;
+    h = (struct HeapArchiveHeader *)shm;
     h->mapped_addr = shm;
     h->none_addr = Py_None;
     h->true_addr = Py_True;
@@ -61,7 +64,8 @@ _PyMem_CreateSharedMmap(wchar_t *const archive)
     return shm;
 }
 
-void patch_obj_header(void);
+void
+patch_obj_header(void);
 
 #ifdef MAP_POPULATE
 #define M_POPULATE MAP_POPULATE
@@ -80,28 +84,32 @@ _PyMem_LoadSharedMmap(wchar_t *const archive)
     int fd = open(local_archive, O_RDWR);
     struct stat buf;
     fstat(fd, &buf);
-    struct header hbuf;
+    struct HeapArchiveHeader hbuf;
     if (read(fd, &hbuf, sizeof(hbuf)) != sizeof(hbuf)) {
+        printf("%zd\n", read(fd, &hbuf, sizeof(hbuf)));
         perror("read header");
         abort();
     }
-    printf("[sharedheap] requesting %p...", hbuf.mapped_addr);
-    size_t aligned_size = (hbuf.used + 4095) & ~4095;
-    shm = mmap(hbuf.mapped_addr, aligned_size,
-               PROT_READ | PROT_WRITE,
-               MAP_PRIVATE | MAP_FIXED | (USING_MMAP ? M_POPULATE : MAP_ANONYMOUS),
-               fd, 0);
+    if (Py_CDSVerboseFlag > 0) {
+        printf("[sharedheap] requesting %p...", hbuf.mapped_addr);
+    }
+    size_t aligned_size = ALIEN_TO(hbuf.used, 4096);
+    shm = mmap(
+        hbuf.mapped_addr, aligned_size, PROT_READ | PROT_WRITE,
+        MAP_PRIVATE | MAP_FIXED | (USING_MMAP ? M_POPULATE : MAP_ANONYMOUS),
+        fd, 0);
     long t1 = nanoTime();
     if (shm == MAP_FAILED || shm != hbuf.mapped_addr) {
         perror("mmap");
         abort();
     }
-    h = (struct header *) shm;
+    h = (struct HeapArchiveHeader *)shm;
     if (USING_MMAP) {
-        for (int i = 0; i < h->used; i += 4096) {
-            ((char volatile *) shm)[i] += 0;
+        for (size_t i = 0; i < h->used; i += 4096) {
+            ((char volatile *)shm)[i] += 0;
         }
-    } else {
+    }
+    else {
         lseek(fd, 0, SEEK_SET);
         int nread = 0;
         while (nread < hbuf.used) {
@@ -110,68 +118,43 @@ _PyMem_LoadSharedMmap(wchar_t *const archive)
     }
     close(fd);
     long t2 = nanoTime();
-    printf("SUCCESS elapsed=%ld ns (%ld + %ld)\n", t2 - t0, t1 - t0, t2 - t1);
+    if (Py_CDSVerboseFlag > 0) {
+        printf("[sharedheap] SUCCESS elapsed=%ld ns (%ld + %ld)\n", t2 - t0,
+               t1 - t0, t2 - t1);
+    }
     patch_obj_header();
     return shm;
-}
-
-// typedef int (*visitproc)(PyObject *, void *);
-// typedef int (*traverseproc)(PyObject *, visitproc, void *);
-int patch_type1(PyObject **opp, void *shift);
-
-int
-patch_type(PyObject *op, void *shift)
-{
-    PyTypeObject *type = (PyTypeObject *) ((char *) Py_TYPE(op) + (long) shift);
-    Py_SET_TYPE(op, type);
-    if (type->tp_after_patch) {
-        type->tp_after_patch(op, shift);
-    }
-    if (type->tp_traverse1) {
-        type->tp_traverse1(op, patch_type1, shift);
-    } else if (type->tp_traverse) {
-        type->tp_traverse(op, patch_type, shift);
-    }
-    return 0;
-}
-
-int
-patch_type1(PyObject **opp, void *shift)
-{
-    PyObject *op = *opp;
-    if (op == h->none_addr || op == h->true_addr || op == h->false_addr || op == h->ellipsis_addr) {
-        *opp = (PyObject *) ((char *) op + (long) shift);
-    } else {
-        patch_type(*opp, shift);
-    }
-    return 0;
 }
 
 void
 patch_obj_header(void)
 {
     assert(shm);
-    long shift = (char *) Py_None - (char *) h->none_addr;
-    printf("[sharedheap] ASLR data segment shift = %c0x%lx\n", shift < 0 ? '-' : ' ', labs(shift));
+    shift = (void *)Py_None - (void *)h->none_addr;
+    if (Py_CDSVerboseFlag > 0) {
+        printf("[sharedheap] ASLR data segment shift = %c0x%lx\n",
+               shift < 0 ? '-' : ' ', labs(shift));
+    }
     long t0 = nanoTime();
     if (shift) {
-        if (h->obj) {
-            patch_type1(&h->obj, (void *) shift);
-        }
         h->none_addr = Py_None;
         h->true_addr = Py_True;
         h->false_addr = Py_False;
         h->ellipsis_addr = Py_Ellipsis;
     }
-    printf("[sharedheap] ASLR fix FINISH, elapsed=%ld ns\n", nanoTime() - t0);
+    if (Py_CDSVerboseFlag > 0) {
+        printf("[sharedheap] ASLR fix FINISH, elapsed=%ld ns\n",
+               nanoTime() - t0);
+    }
 }
 
 static void *
 _PyMem_SharedMalloc(size_t size)
 {
     n_alloc++;
-    if (!size) size = 1;
-    size_t size_aligned = (size + 7) & ~7;
+    if (!size)
+        size = 1;
+    size_t size_aligned = ALIEN_TO(size, 8);
     void *res = shm + h->used;
     h->used += size_aligned;
     return res;
@@ -180,26 +163,54 @@ _PyMem_SharedMalloc(size_t size)
 int
 _PyMem_IsShared(void *ptr)
 {
-    return shm && (char *) ptr >= shm && (char *) ptr < (shm + IMG_SIZE);
+    return shm && (char *)ptr >= shm && (char *)ptr < (shm + IMG_SIZE);
+}
+
+struct HeapArchivedObject *
+serialize(PyObject *op, void *(*alloc)(size_t))
+{
+    struct HeapArchivedObject *res =
+        _PyMem_SharedMalloc(sizeof(struct HeapArchivedObject));
+    res->type = Py_TYPE(op);
+    if (!res->type->tp_archive_serialize) {
+        printf("type not supported: %s\n", res->type->tp_name);
+        assert(0);
+    }
+    res->obj = res->type->tp_archive_serialize(op, alloc);
+    return res;
 }
 
 void
 _PyMem_SharedMoveIn(PyObject *o)
 {
-    PyTypeObject *type = Py_TYPE(o);
-    assert(type->tp_copy);
-    assert(!h->obj);
-    PyObject *copy = type->tp_copy(o, _PyMem_SharedMalloc);
-    assert(_PyMem_IsShared(copy));
-    printf("[sharedheap] deep copy a `%s object`@%p to %p\n", Py_TYPE(copy)->tp_name, o, copy);
-    h->obj = copy;
+    const PyConfig *conf = _Py_GetConfig();
+    assert((conf->cds_mode & 3) == 1);
+
+    h->used = 4096;
+    h->obj = serialize(o, _PyMem_SharedMalloc);
 }
 
 PyObject *
-_PyMem_SharedGetObj(void)
+deserialize(struct HeapArchivedObject *archived_object, long shift)
 {
-    if (!h->obj) return Py_None;
-    Py_INCREF(h->obj);
-    return h->obj;
+    if (!archived_object || !archived_object->obj) {
+        return Py_None;
+    }
+    if (!archived_object->ready_obj) {
+        deserializearchivefunc f =
+            UNSHIFT(archived_object->type, shift, PyTypeObject)
+                ->tp_archive_deserialize;
+        assert(f);
+        // extra INCREF in tp_archive_deserialize since we don't need to free
+        // archived objects.
+        archived_object->ready_obj = f(archived_object->obj, shift);
+    }
+    Py_INCREF(archived_object->ready_obj);
+    return archived_object->ready_obj;
 }
 
+PyObject *
+_PyMem_SharedGetObj()
+{
+    return deserialize(h->obj, shift);
+}

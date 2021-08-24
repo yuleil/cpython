@@ -137,30 +137,6 @@ PyTuple_Size(PyObject *op)
 }
 
 PyObject *
-_PyTuple_Copy(PyObject *from, void *(*alloc)(size_t))
-{
-    if (!PyTuple_CheckExact(from)) {
-        PyErr_BadInternalCall();
-        return NULL;
-    }
-    PyTupleObject *fromOp = (PyTupleObject *) from;
-    Py_ssize_t sz = Py_SIZE(from);
-    Py_ssize_t bytes = _PyObject_VAR_SIZE(&PyTuple_Type, sz);
-    PyTupleObject *op = (PyTupleObject *) alloc(bytes);
-    (void) PyObject_INIT_VAR(op, &PyTuple_Type, sz);
-    for (int i = 0; i < sz; i++) {
-        PyObject *elem = fromOp->ob_item[i];
-        if (!Py_TYPE(elem)->tp_copy) {
-            printf("%s is not copyable\n", Py_TYPE(elem)->tp_name);
-        }
-        assert(Py_TYPE(elem)->tp_copy);
-        op->ob_item[i] = Py_TYPE(elem)->tp_copy(elem, alloc);
-    }
-
-    return (PyObject *)op;
-}
-
-PyObject *
 PyTuple_GetItem(PyObject *op, Py_ssize_t i)
 {
     if (!PyTuple_Check(op)) {
@@ -649,14 +625,36 @@ tupletraverse(PyTupleObject *o, visitproc visit, void *arg)
     return 0;
 }
 
-static int
-tupletraverse1(PyTupleObject *o, visitproc1 visit, void *arg)
-{
-    Py_ssize_t i;
+#include "sharedheap.h"
 
-    for (i = Py_SIZE(o); --i >= 0; )
-        Py_VISIT_REF(o->ob_item[i]);
-    return 0;
+void *
+_PyTuple_Serialize(PyObject *src0, void *(*alloc)(size_t))
+{
+    if (!PyTuple_CheckExact(src0)) {
+        PyErr_BadInternalCall();
+        return NULL;
+    }
+    PyTupleObject *fromOp = (PyTupleObject *)src0;
+    Py_ssize_t sz = Py_SIZE(fromOp);
+    Py_ssize_t bytes = _PyObject_VAR_SIZE(&PyTuple_Type, sz);
+    PyTupleObject *op = (PyTupleObject *)alloc(bytes);
+    (void)PyObject_INIT_VAR(op, &PyTuple_Type, sz);
+    for (Py_ssize_t i = 0; i < sz; i++) {
+        PyObject *elem = fromOp->ob_item[i];
+        op->ob_item[i] = (void *)serialize(elem, alloc);
+    }
+    return (PyObject *)op;
+}
+
+PyObject *
+_PyTuple_Deserialize(void *p, long shift)
+{
+    PyTupleObject *op = (PyTupleObject *)p;
+    Py_TYPE(op) = &PyTuple_Type;
+    for (Py_ssize_t i = Py_SIZE(op); --i >= 0;)
+        op->ob_item[i] = deserialize((void *)op->ob_item[i], shift);
+    Py_INCREF(op);
+    return op;
 }
 
 static PyObject *
@@ -923,8 +921,8 @@ PyTypeObject PyTuple_Type = {
     tuple_new,                                  /* tp_new */
     PyObject_GC_Del,                            /* tp_free */
     .tp_vectorcall = tuple_vectorcall,
-    .tp_copy = _PyTuple_Copy,
-    .tp_traverse1 = (traverseproc1)tupletraverse1,
+    .tp_archive_serialize = _PyTuple_Serialize,
+    .tp_archive_deserialize = _PyTuple_Deserialize,
 };
 
 /* The following function breaks the notion that tuples are immutable:

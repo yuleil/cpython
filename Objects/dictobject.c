@@ -117,6 +117,8 @@ converting the dict to the combined table.
 #include "dict-common.h"
 #include "stringlib/eq.h"    // unicode_eq()
 
+#include "sharedheap.h"
+
 /*[clinic input]
 class dict "PyDictObject *" "&PyDict_Type"
 [clinic start generated code]*/
@@ -3151,100 +3153,54 @@ dict_traverse(PyObject *op, visitproc visit, void *arg)
     return 0;
 }
 
-static int
-dict_traverse1(PyObject *op, visitproc1 visit, void *arg)
-{
-    PyDictObject *mp = (PyDictObject *)op;
-    PyDictKeysObject *keys = mp->ma_keys;
-    PyDictKeyEntry *entries = DK_ENTRIES(keys);
-    Py_ssize_t i, n = keys->dk_nentries;
+struct HeapArchivedDictItem {
+    struct HeapArchivedObject *key;
+    struct HeapArchivedObject *value;
+    struct HeapArchivedDictItem *next;
+};
+struct HeapArchivedDict {
+    struct HeapArchivedDictItem *head;
+    dict_lookup_func lookup;
+};
 
-    assert(keys->dk_lookup == lookdict);
-    for (i = 0; i < n; i++) {
-        if (entries[i].me_value != NULL) {
-            Py_VISIT_REF(entries[i].me_value);
-            Py_VISIT_REF(entries[i].me_key);
+void *
+_PyDict_Serialize(PyObject *src0, void *(*alloc)(size_t))
+{
+    Py_ssize_t i = 0;
+    PyObject *key, *value;
+    struct HeapArchivedDictItem *head = NULL, *prev, *cur;
+    while (PyDict_Next(src0, &i, &key, &value)) {
+        prev = cur;
+        cur = alloc(sizeof(struct HeapArchivedDictItem));
+        if (head == NULL) {
+            head = cur;
+        } else if (prev != NULL) {
+            prev->next = cur;
         }
+        cur->key = serialize(key, alloc);
+        cur->value = serialize(value, alloc);
     }
-    return 0;
+
+    struct HeapArchivedDict *archived_dict = alloc(sizeof(struct HeapArchivedDict));
+
+    archived_dict->head = head;
+    archived_dict->lookup = ((PyDictObject *)(src0))->ma_keys->dk_lookup;
+
+    return archived_dict;
 }
 
 PyObject *
-copy(PyObject *op, void *(*alloc)(size_t))
+_PyDict_Deserialize(void *p, long shift)
 {
-    PyDictObject *mp = (PyDictObject *)op;
-    PyDictKeysObject *keys = mp->ma_keys;
-    Py_ssize_t i, n = keys->dk_nentries;
-
-    assert(mp->ma_used);
-    assert(!mp->ma_values);
-
-    PyDictObject *new_mp = (PyDictObject *) alloc(_PyObject_SIZE(&PyDict_Type));
-    PyObject_INIT(new_mp, &PyDict_Type);
-
-    size_t size = keys->dk_size;
-
-    PyDictKeysObject *dk;
-    Py_ssize_t es;
-
-    assert(size >= PyDict_MINSIZE);
-    assert(IS_POWER_OF_2(size));
-
-    Py_ssize_t usable = USABLE_FRACTION(size);
-    if (size <= 0xff) {
-        es = 1;
+    PyObject *op = PyDict_New();
+    struct HeapArchivedDict *archived_dict = (struct HeapArchivedDict *)p;
+    struct HeapArchivedDictItem *item = archived_dict->head;
+    while (item != NULL) {
+        PyObject *key = deserialize(item->key, shift), *value = deserialize(item->value, shift);
+        PyDict_SetItem(op, key, value);
+        item = item->next;
     }
-    else if (size <= 0xffff) {
-        es = 2;
-    }
-#if SIZEOF_VOID_P > 4
-    else if (size <= 0xffffffff) {
-        es = 4;
-    }
-#endif
-    else {
-        es = sizeof(Py_ssize_t);
-    }
-    dk = alloc(sizeof(PyDictKeysObject)
-               + es * size
-               + sizeof(PyDictKeyEntry) * usable);
-    if (dk == NULL) {
-        PyErr_NoMemory();
-        return NULL;
-    }
-    dk->dk_refcnt = 1;
-    dk->dk_size = keys->dk_size;
-    dk->dk_usable = keys->dk_usable;
-    dk->dk_lookup = keys->dk_lookup;
-    dk->dk_nentries = keys->dk_nentries;
-    memcpy(&dk->dk_indices[0], &keys->dk_indices, es * size);
-    memcpy(DK_ENTRIES(dk), DK_ENTRIES(keys), sizeof(PyDictKeyEntry) * usable);
-
-    PyDictKeyEntry *entries = DK_ENTRIES(dk);
-    for (i = 0; i < n; i++) {
-        if (entries[i].me_value != NULL) {
-            PyObject *k = entries[i].me_key;
-            assert(Py_TYPE(k)->tp_copy);
-            entries[i].me_key = Py_TYPE(k)->tp_copy(k, alloc);
-            PyObject *v = entries[i].me_value;
-            assert(Py_TYPE(v)->tp_copy);
-            entries[i].me_value = Py_TYPE(v)->tp_copy(v, alloc);
-        }
-    }
-
-    new_mp->ma_used = mp->ma_used;
-    new_mp->ma_version_tag = mp->ma_version_tag;
-    new_mp->ma_keys = dk;
-    new_mp->ma_values = NULL;
-
-    return (PyObject *)new_mp;
-}
-
-void
-after_patch(PyObject *op, void *shift)
-{
-    PyDictObject *mp = (PyDictObject *)op;
-    mp->ma_keys->dk_lookup = (dict_lookup_func)((char *) mp->ma_keys->dk_lookup + (long) shift);
+    return op;
 }
 
 static int
@@ -3552,9 +3508,8 @@ PyTypeObject PyDict_Type = {
     dict_new,                                   /* tp_new */
     PyObject_GC_Del,                            /* tp_free */
     .tp_vectorcall = dict_vectorcall,
-    .tp_copy = copy,
-    .tp_after_patch = after_patch,
-    .tp_traverse1 = dict_traverse1,
+    .tp_archive_serialize = _PyDict_Serialize,
+    .tp_archive_deserialize = _PyDict_Deserialize,
 };
 
 PyObject *

@@ -770,12 +770,11 @@ pyinit_config(_PyRuntimeState *runtime,
         return status;
     }
 
-    if (config->cds_mode == 1) {
+    if ((config->cds_mode & 1) == 1) {
+//        Py_AtExit();
         _PyMem_CreateSharedMmap(config->cds_archive);
-    } else if (config->cds_mode == 2) {
+    } else if ((config->cds_mode & 2) == 2) {
         _PyMem_LoadSharedMmap(config->cds_archive);
-    } else if (config->cds_mode > 0) {
-        // reserved
     }
 
     /* Only when we get here is the runtime core fully initialized */

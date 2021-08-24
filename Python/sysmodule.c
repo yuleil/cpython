@@ -2444,8 +2444,8 @@ static PyStructSequence_Field flags_fields[] = {
     {"isolated",                "-I"},
     {"dev_mode",                "-X dev"},
     {"utf8_mode",               "-X utf8"},
-    {"cds_mode",                "TBD"},
-    {"cds_verbose",             "TBD"},
+    {"cds_mode",                "PYCDSMODE"},
+    {"cds_verbose",             "PYCDSVERBOSE"},
     {0}
 };
 

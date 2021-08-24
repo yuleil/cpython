@@ -1218,10 +1218,20 @@ resize_copy0(PyObject *unicode, Py_ssize_t length, void *(*alloc)(size_t))
     }
 }
 
-static PyObject*
-copy(PyObject *unicode, void *(*alloc)(size_t))
+void *
+_PyUnicode_Serialize(PyObject *src0, void *(*alloc)(size_t))
 {
-    return resize_copy0(unicode, PyUnicode_GET_LENGTH(unicode), alloc);
+    return (void *)resize_copy0(src0, PyUnicode_GET_LENGTH(src0), alloc);
+}
+
+PyObject *
+_PyUnicode_Deserialize(void *p, long shift)
+{
+    PyObject *op = (PyObject *)p;
+    Py_TYPE(op) = &PyUnicode_Type;
+    Py_INCREF(op);
+    _PyUnicode_HASH(op) = -1;
+    return op;
 }
 
 static PyObject*
@@ -15554,7 +15564,8 @@ PyTypeObject PyUnicode_Type = {
     0,                            /* tp_alloc */
     unicode_new,                  /* tp_new */
     PyObject_Del,                 /* tp_free */
-    .tp_copy = copy,
+    .tp_archive_serialize = _PyUnicode_Serialize,
+    .tp_archive_deserialize = _PyUnicode_Deserialize,
 };
 
 /* Initialize the Unicode implementation */

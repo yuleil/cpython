@@ -41,10 +41,16 @@ ellipsis_reduce(PyObject *op, PyObject *Py_UNUSED(ignored))
     return PyUnicode_FromString("Ellipsis");
 }
 
-static PyObject *
-ellipsis_copy(PyObject *from, void *(*alloc)(size_t))
+void *
+_PyEllipsis_Serialize(PyObject *src0, void *(*alloc)(size_t))
 {
-    return from;
+    return NULL;
+}
+
+PyObject *
+_PyEllipsis_Deserialize(void *p, long shift)
+{
+    return Py_Ellipsis;
 }
 
 static PyMethodDef ellipsis_methods[] = {
@@ -91,7 +97,8 @@ PyTypeObject PyEllipsis_Type = {
     0,                                  /* tp_init */
     0,                                  /* tp_alloc */
     ellipsis_new,                       /* tp_new */
-    .tp_copy = ellipsis_copy
+    .tp_archive_serialize = _PyEllipsis_Serialize,
+    .tp_archive_deserialize = _PyEllipsis_Deserialize,
 };
 
 PyObject _Py_EllipsisObject = {
