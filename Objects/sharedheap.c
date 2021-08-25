@@ -5,6 +5,7 @@
 #include "sharedheap.h"
 
 #include <fcntl.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/mman.h>
@@ -17,6 +18,8 @@ static char *shm;
 struct HeapArchiveHeader *h;
 static int n_alloc;
 static long shift;
+static bool dumped;
+static int fd;
 
 const unsigned int DUMP_FLAG = 1 << 0;
 const unsigned int LOAD_FLAG = 1 << 1;
@@ -40,7 +43,7 @@ nanoTime()
 void *
 _PyMem_CreateSharedMmap(wchar_t *const archive)
 {
-    int fd =
+    fd =
         open(Py_EncodeLocale(archive, NULL), O_RDWR | O_CREAT | O_TRUNC, 0666);
     if (fd < 0) {
         perror("open");
@@ -54,7 +57,6 @@ _PyMem_CreateSharedMmap(wchar_t *const archive)
         perror("mmap");
         abort();
     }
-    close(fd);
     h = (struct HeapArchiveHeader *)shm;
     h->mapped_addr = shm;
     h->none_addr = Py_None;
@@ -82,7 +84,7 @@ _PyMem_LoadSharedMmap(wchar_t *const archive)
     if (local_archive == NULL) {
         // todo: error handling
     }
-    int fd = open(local_archive, O_RDWR);
+    fd = open(local_archive, O_RDWR);
     struct stat buf;
     fstat(fd, &buf);
     struct HeapArchiveHeader hbuf;
@@ -135,21 +137,27 @@ void
 patch_obj_header(void)
 {
     assert(shm);
-    shift = (void *)Py_None - (void *)h->none_addr;
-    if (Py_CDSVerboseFlag > 0) {
-        printf("[sharedheap] ASLR data segment shift = %c0x%lx\n",
-               shift < 0 ? '-' : ' ', labs(shift));
+    if (h->none_addr) {
+        shift = (void *)Py_None - (void *)h->none_addr;
+        h->none_addr = Py_None;
+
+#define SCHWIFTY(p, r)                                    \
+    if (UNSHIFT((p), (shift), void *) != (void *)(r)) {   \
+        Py_FatalError("[sharedheap] ASLR check failed."); \
+    }                                                     \
+    else {                                                \
+        (p) = (r);                                        \
     }
-    long t0 = nanoTime();
+        SCHWIFTY(h->true_addr, Py_True);
+        SCHWIFTY(h->false_addr, Py_False);
+        SCHWIFTY(h->ellipsis_addr, Py_Ellipsis);
+#undef SCHWIFTY
+    }
     if (shift) {
         h->none_addr = Py_None;
         h->true_addr = Py_True;
         h->false_addr = Py_False;
         h->ellipsis_addr = Py_Ellipsis;
-    }
-    if (Py_CDSVerboseFlag > 0) {
-        printf("[sharedheap] ASLR fix FINISH, elapsed=%ld ns\n",
-               nanoTime() - t0);
     }
 }
 
@@ -161,7 +169,10 @@ _PyMem_SharedMalloc(size_t size)
         size = 1;
     size_t size_aligned = ALIEN_TO(size, 8);
     void *res = shm + h->used;
-    h->used += size_aligned;
+    if ((h->used += size_aligned) > IMG_SIZE) {
+        h->used -= size_aligned;
+        return NULL;
+    }
     return res;
 }
 
@@ -178,8 +189,9 @@ serialize(PyObject *op, void *(*alloc)(size_t))
         _PyMem_SharedMalloc(sizeof(struct HeapArchivedObject));
     res->type = Py_TYPE(op);
     if (!res->type->tp_archive_serialize) {
-        printf("type not supported: %s\n", res->type->tp_name);
-        assert(0);
+        char buf[128];
+        sprintf(buf, "type not supported: %s\n", res->type->tp_name);
+        Py_FatalError(buf);
     }
     res->obj = res->type->tp_archive_serialize(op, alloc);
     return res;
@@ -189,10 +201,16 @@ void
 _PyMem_SharedMoveIn(PyObject *o)
 {
     const PyConfig *conf = _Py_GetConfig();
-    assert((conf->cds_mode & 3) == 1);
+    if (dumped || (conf->cds_mode & 3) != 1)
+        return;
 
-    h->used = 4096;
+    h->used = ALIEN_TO(sizeof(struct HeapArchiveHeader), 8);
     h->obj = serialize(o, _PyMem_SharedMalloc);
+
+    dumped = true;
+    ftruncate(fd, h->used);
+    close(fd);
+    fd = 0;
 }
 
 PyObject *
@@ -206,8 +224,8 @@ deserialize(struct HeapArchivedObject *archived_object, long shift)
             UNSHIFT(archived_object->type, shift, PyTypeObject)
                 ->tp_archive_deserialize;
         assert(f);
-        // extra INCREF in tp_archive_deserialize since we don't need to free
-        // archived objects.
+        // There's extra INCREF in tp_archive_deserialize since we don't need
+        // to free archived objects.
         archived_object->ready_obj = f(archived_object->obj, shift);
     }
     Py_INCREF(archived_object->ready_obj);
