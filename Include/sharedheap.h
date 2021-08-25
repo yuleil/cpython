@@ -6,6 +6,10 @@
 #define ALIEN_TO(size, align) (((size) + ((align)-1)) & ~((align)-1))
 #define UNSHIFT(p, shift, ty) ((ty *)((void *)(p) + (shift)))
 
+/* Indicates that I know what I'm doing when casting one pointer to an
+ * unrelated type. */
+#define REINTERPRET_CAST(t, p) ((t *)(void *)(p))
+
 struct HeapArchivedObject {
     PyTypeObject *type;
     PyObject *ready_obj;
@@ -34,6 +38,7 @@ _PyMem_SharedMoveIn(PyObject *o);
 PyObject *
 _PyMem_SharedGetObj(void);
 
-int _PyMem_IsShared(void *ptr);
+int
+_PyMem_IsShared(void *ptr);
 
 #endif  // CPYTHON_INCLUDE_SHAREDHEAP_H_

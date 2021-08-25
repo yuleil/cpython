@@ -295,7 +295,9 @@ _PyCode_Serialize(PyObject *src0, void *(*alloc)(size_t))
     // this doesn't feel very right but works so far.
 #define SERIALIZE_CAST_FIELD(field)                          \
     do {                                                     \
-        co->field = (void *)serialize(fromCo->field, alloc); \
+        co->field = REINTERPRET_CAST(                        \
+            PyObject,                                        \
+            serialize(fromCo->field, alloc));                \
     } while (0)
 
     co->co_argcount = fromCo->co_argcount;

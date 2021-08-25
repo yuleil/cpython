@@ -641,7 +641,7 @@ _PyTuple_Serialize(PyObject *src0, void *(*alloc)(size_t))
     (void)PyObject_INIT_VAR(op, &PyTuple_Type, sz);
     for (Py_ssize_t i = 0; i < sz; i++) {
         PyObject *elem = fromOp->ob_item[i];
-        op->ob_item[i] = (void *)serialize(elem, alloc);
+        op->ob_item[i] = REINTERPRET_CAST(PyObject, serialize(elem, alloc));
     }
     return (PyObject *)op;
 }

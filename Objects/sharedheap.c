@@ -1,5 +1,6 @@
 #define IMG_SIZE (1024 * 1024 * 1024)
-#define REQUESTING_ADDR ((void *)0x280000000L)
+//#define REQUESTING_ADDR ((void *)0x280000000L)
+#define REQUESTING_ADDR ((void *)0x300000000L)
 
 #include "sharedheap.h"
 
@@ -99,11 +100,15 @@ _PyMem_LoadSharedMmap(wchar_t *const archive)
         MAP_PRIVATE | MAP_FIXED | (USING_MMAP ? M_POPULATE : MAP_ANONYMOUS),
         fd, 0);
     long t1 = nanoTime();
-    if (shm == MAP_FAILED || shm != hbuf.mapped_addr) {
-        perror("mmap");
+    if (shm == MAP_FAILED) {
+        perror("mmap failed");
         abort();
     }
-    h = (struct HeapArchiveHeader *)shm;
+    else if (shm != hbuf.mapped_addr) {
+        perror("mmap relocated");
+        abort();
+    }
+    h = REINTERPRET_CAST(struct HeapArchiveHeader, shm);
     if (USING_MMAP) {
         for (size_t i = 0; i < h->used; i += 4096) {
             ((char volatile *)shm)[i] += 0;
