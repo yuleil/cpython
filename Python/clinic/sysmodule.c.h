@@ -263,7 +263,7 @@ sys_shm_move_in(PyObject *module, PyObject *arg)
     {"shm_getobj", (PyCFunction)sys_shm_getobj, METH_NOARGS, "tbd"},
 
 static PyObject *
-sys_shm_getobj(PyObject *module)
+sys_shm_getobj(PyObject *Py_UNUSED(module), PyObject *Py_UNUSED(ignored))
 {
     return _PyMem_SharedGetObj();
 }

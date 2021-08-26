@@ -118,7 +118,7 @@ _PyMem_LoadSharedMmap(wchar_t *const archive)
     }
     else {
         lseek(fd, 0, SEEK_SET);
-        int nread = 0;
+        size_t nread = 0;
         while (nread < hbuf.used) {
             nread += read(fd, shm + nread, hbuf.used - nread);
         }

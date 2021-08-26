@@ -75,7 +75,7 @@ _PyBool_Deserialize(void *p, long shift)
         return Py_False;
     }
     else {
-        assert(0);  // should not reach here
+        Py_FatalError("should not reach here.");
     }
 }
 
