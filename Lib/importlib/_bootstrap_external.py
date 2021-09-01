@@ -25,9 +25,6 @@ import _io
 import sys
 import _warnings
 import marshal
-import time
-
-import atexit
 
 
 _MS_WINDOWS = (sys.platform == 'win32')
@@ -1414,10 +1411,7 @@ class PathFinder:
         """
         if path is None:
             path = sys.path
-        t0 = time.time()
         spec = cls._get_spec(fullname, path, target)
-        if sys.flags.cds_verbose >= 2:
-            print('[find_spec]' + fullname + ': ' + str((time.time() - t0) * 1000), file=sys.stderr)
         if spec is None:
             return None
         elif spec.loader is None:
@@ -1715,52 +1709,129 @@ def _install(_bootstrap_module):
     patch_import_paths()
 
 
+def _cds_verbose(msg, verbosity=1):
+    if sys.flags.cds_verbose >= verbosity:
+        print(f'[CDS] {msg}', file=sys.stderr, flush=True)
+
+
+class SharedCodeWrap:
+    shared_code = None  # {name: code}
+    shared_data = None  # {name: (package, file, path)}
+
+    @classmethod
+    def ensure_initialized(cls):
+        if cls.shared_code is None:
+            _cds_verbose('shared_code storage is None, initializing.', 1)
+            cls.shared_code = {}
+        if cls.shared_data is None:
+            _cds_verbose('shared_code storage is None, initializing.', 1)
+            cls.shared_data = {}
+
+    @classmethod
+    def set_module_data(cls, name, package, file, path):
+        cls.ensure_initialized()
+
+        assert name in cls.shared_code, f'{name}, {package}, {file}, {path}'
+        assert name not in cls.shared_data, f'{name}, {package}, {file}, {path}'
+        if path is not None:
+            path = tuple(path)
+
+        cls.shared_data[name] = (package, file, path)
+
+    @classmethod
+    def set_module_code(cls, name, code):
+        cls.ensure_initialized()
+
+        assert name not in cls.shared_code, name
+        assert name not in cls.shared_data, name
+        cls.shared_code[name] = code
+
+    @classmethod
+    def get_shared_module(cls):
+        cls.ensure_initialized()
+
+        return {
+            k: (*cls.shared_data[k], cls.shared_code[k])
+            for k in cls.shared_code.keys() & cls.shared_data.keys()
+        }
+
+
 def patch_import_paths():
     if sys.flags.cds_mode == 2:
         sys.meta_path.insert(0, CDSFinder)
     elif sys.flags.cds_mode == 1:
-        def patch(orig_get_code):
-            # fixme: maybe @classmethod?
+        def patch_get_code(orig_get_code):
             def wrap_get_code(self, name):
                 code = orig_get_code(self, name)
                 if code is not None:
-                    if not hasattr(sys, 'shared_code'):
-                        sys.shared_code = {}
-                    sys.shared_code[name] = code
+                    _cds_verbose(f"{self.__class__.__name__}.get_code('{name}') returns code.", 2)
+                    SharedCodeWrap.set_module_code(name, code)
+                else:
+                    _cds_verbose(f"{self.__class__.__name__}.get_code('{name}') returns None.", 2)
                 return code
             return wrap_get_code
 
-        SourceFileLoader.get_code = patch(SourceFileLoader.get_code)
-        SourcelessFileLoader.get_code = patch(SourcelessFileLoader.get_code)
+        SourceFileLoader.get_code = patch_get_code(SourceLoader.get_code)
+        # SourcelessFileLoader.get_code = patch_get_code(SourcelessFileLoader.get_code)
+
+        def patch_exec_module(orig_exec_module):
+            def wrap_exec_module(self, module):
+                # module may override __name__ (e.g. _collections_abc) so we get that before exec_module
+                name = module.__name__
+                orig_exec_module(self, module)
+                SharedCodeWrap.set_module_data(name, *(
+                    getattr(module, i, None) for i in
+                    ('__package__', '__file__', '__path__')
+                ))
+                return module
+            return wrap_exec_module
+
+        _LoaderBasics.exec_module = patch_exec_module(_LoaderBasics.exec_module)
 
         import atexit
 
         def shm_hook():
-            shared_code = getattr(sys, 'shared_code', None)
+            shared_code = SharedCodeWrap.get_shared_module()
             if shared_code is not None:
+                _cds_verbose(f'moving in modules: {shared_code.keys()}.', 2)
                 sys.shm_move_in(shared_code)
+                _cds_verbose(f'moving in finished.', 2)
+            else:
+                _cds_verbose('shared_code is None, do not move in.', 2)
 
         atexit.register(shm_hook)
 
+
 class CDSFinder:
     # class-level cache
-    shared_code: dict
+    shared_module: dict = None
+    shared_module_initialized = False
 
     # Start of importlib.abc.MetaPathFinder interface.
     @classmethod
     def find_spec(cls, fullname, path, target=None):
-        if not hasattr(cls, 'shared_code'):
-            cls.shared_code = sys.shm_getobj()
-        if (
-                cls.shared_code is None or
-                not isinstance(cls.shared_code, dict) or
-                fullname not in cls.shared_code
+        if not cls.shared_module_initialized:
+            shared_module = sys.shm_getobj()
+            cls.shared_module_initialized = True
+
+            if not (shared_module and isinstance(shared_module, dict)):
+                return
+            cls.shared_module = shared_module
+        elif (
+                cls.shared_module is None or
+                fullname not in cls.shared_module
         ):
             return None
-        code = cls.shared_code[fullname]
+        _cds_verbose(f"find_spec hit cached '{fullname}'", 1)
+        package, file, path, code = cls.shared_module[fullname]
         loader = cls(fullname, code)
-        spec = _bootstrap.ModuleSpec(fullname, loader, origin=None,
-                                     is_package=any(i.startswith(fullname) and i != fullname for i in cls.shared_code.keys()))
+        is_package = path is not None
+        spec = _bootstrap.ModuleSpec(fullname, loader, origin=file,
+                                     is_package=is_package)
+        if file:
+            spec.has_location = True
+        if is_package:
+            spec.submodule_search_locations = list(path)
         return spec
 
     @classmethod
@@ -1776,6 +1847,7 @@ class CDSFinder:
     def create_module(self, spec):
         return None
     def exec_module(self, module):
+        _cds_verbose(f"exec_module cached '{self.fullname}'", 2)
         _bootstrap._call_with_frames_removed(exec, self.code, module.__dict__)
     # # Start of importlib.abc.InspectLoader interface.
     # def get_code(self, fullname):

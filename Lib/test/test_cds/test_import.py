@@ -24,3 +24,22 @@ class CdsImportTest(CdsTestMixin, unittest.TestCase):
         self.assert_python_ok(
             '-c', f'import json',
             **self.get_cds_env(2, self.TEST_ARCHIVE, 2))
+
+    @assert_archive_created
+    def test_import_subpackage_not_in_archive(self):
+        self.assert_python_ok(
+            '-c', f'import xml',
+            **self.get_cds_env(1, self.TEST_ARCHIVE, 2))
+        self.assert_python_ok(
+            '-c', f'import xml.dom',
+            **self.get_cds_env(2, self.TEST_ARCHIVE, 2))
+
+    def test_cached_import_result(self):
+        printer = "import xml\nfor i in ('__package__', '__file__', '__path__'):\n    print(xml.__dict__.get(i, None))"
+        trace_out = self.assert_python_ok(
+            '-c', printer,
+            **self.get_cds_env(1, self.TEST_ARCHIVE, 2))
+        replay_out = self.assert_python_ok(
+            '-c', printer,
+            **self.get_cds_env(2, self.TEST_ARCHIVE, 2))
+        self.assertEqual(trace_out.out.decode(), replay_out.out.decode())
