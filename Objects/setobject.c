@@ -35,6 +35,8 @@
 #include "pycore_object.h"        // _PyObject_GC_UNTRACK()
 #include <stddef.h>               // offsetof()
 
+#include "sharedheap.h"
+
 /* Object used as dummy key to fill deleted entries */
 static PyObject _dummy_struct;
 
@@ -961,6 +963,59 @@ make_new_set(PyTypeObject *type, PyObject *iterable)
     }
 
     return (PyObject *)so;
+}
+
+struct HeapArchivedSetItem {
+    struct HeapArchivedObject *item;
+    struct HeapArchivedSetItem *next;
+};
+struct HeapArchivedSet {
+    struct HeapArchivedSetItem *head;
+};
+
+void *
+_PyFrozenSet_Serialize(PyObject *src0, void *(*alloc)(size_t))
+{
+    assert(PyAnySet_CheckExact(src0));
+    PySetObject *from_set = (PySetObject *) src0;
+    assert(!from_set->weakreflist);
+
+    Py_ssize_t pos = 0;
+    setentry *entry;
+
+    struct HeapArchivedSetItem *head = NULL, *prev, *cur;
+    while (set_next(from_set, &pos, &entry)) {
+        prev = cur;
+        cur = alloc(sizeof(struct HeapArchivedSetItem));
+        if (head == NULL) {
+            head = cur;
+        } else if (prev != NULL) {
+            prev->next = cur;
+        }
+        cur ->item = serialize(entry->key, alloc);
+    }
+
+    struct HeapArchivedSet *archived_set = alloc(sizeof(struct HeapArchivedSet));
+
+    archived_set->head = head;
+
+    return archived_set;
+}
+
+PyObject *
+_PyFrozenSet_Deserialize(void *p, long shift)
+{
+    PyObject *set = make_new_set(&PyFrozenSet_Type, NULL);
+
+    struct HeapArchivedSet *archived_set = (struct HeapArchivedSet *)p;
+    struct HeapArchivedSetItem *item = archived_set->head;
+    while (item != NULL) {
+        PyObject *key = deserialize(item->item, shift);
+        PySet_Add(set, key);
+        item = item->next;
+    }
+
+    return set;
 }
 
 static PyObject *
@@ -2231,6 +2286,8 @@ PyTypeObject PyFrozenSet_Type = {
     frozenset_new,                      /* tp_new */
     PyObject_GC_Del,                    /* tp_free */
     .tp_vectorcall = frozenset_vectorcall,
+    .tp_archive_serialize = _PyFrozenSet_Serialize,
+    .tp_archive_deserialize = _PyFrozenSet_Deserialize,
 };
 
 
