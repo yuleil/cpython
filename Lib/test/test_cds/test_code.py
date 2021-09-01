@@ -7,17 +7,6 @@ class CdsSerializeCodeTest(CdsTestMixin, unittest.TestCase):
     TEST_ARCHIVE: str
 
     @assert_archive_created
-    def test_import(self):
-        self.assert_python_ok(
-            '-c', f'import json',
-            **self.get_cds_env(1, self.TEST_ARCHIVE, 0))
-
-        out = self.assert_python_ok(
-            '-c', 'import sys; print(repr(list(sys.shm_getobj().keys())))',
-            **self.get_cds_env(2, self.TEST_ARCHIVE, 0))
-        self.assertIn('json', eval(out.out.decode().strip()))
-
-    @assert_archive_created
     def test_archive_lambda(self):
         def test_archive_code(o):
             r = repr(o)

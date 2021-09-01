@@ -1,6 +1,5 @@
 #define IMG_SIZE (1024 * 1024 * 1024)
-//#define REQUESTING_ADDR ((void *)0x280000000L)
-#define REQUESTING_ADDR ((void *)0x300000000L)
+#define REQUESTING_ADDR ((void *)0x280000000L)
 
 #include "sharedheap.h"
 
@@ -94,7 +93,7 @@ _PyMem_LoadSharedMmap(wchar_t *const archive)
         abort();
     }
     if (Py_CDSVerboseFlag > 0) {
-        printf("[sharedheap] requesting %p...", hbuf.mapped_addr);
+        fprintf(stderr, "[sharedheap] requesting %p...", hbuf.mapped_addr);
     }
     size_t aligned_size = ALIEN_TO(hbuf.used, 4096);
     shm = mmap(
@@ -126,7 +125,7 @@ _PyMem_LoadSharedMmap(wchar_t *const archive)
     close(fd);
     long t2 = nanoTime();
     if (Py_CDSVerboseFlag > 0) {
-        printf("[sharedheap] SUCCESS elapsed=%ld ns (%ld + %ld)\n", t2 - t0,
+        fprintf(stderr, "[sharedheap] SUCCESS elapsed=%ld ns (%ld + %ld)\n", t2 - t0,
                t1 - t0, t2 - t1);
     }
     patch_obj_header();
@@ -232,8 +231,17 @@ deserialize(struct HeapArchivedObject *archived_object, long shift)
     return archived_object->ready_obj;
 }
 
+static PyObject *obj;
+
 PyObject *
 _PyMem_SharedGetObj()
 {
-    return deserialize(h->obj, shift);
+    if (!obj) {
+        if (h && h->obj)
+            obj = deserialize(h->obj, shift);
+        else
+            obj = Py_None;
+    }
+    Py_INCREF(obj);
+    return obj;
 }

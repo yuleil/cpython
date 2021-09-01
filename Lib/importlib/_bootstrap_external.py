@@ -26,6 +26,7 @@ import sys
 import _warnings
 import marshal
 import time
+
 import atexit
 
 
@@ -850,24 +851,7 @@ class _LoaderBasics:
 
     def exec_module(self, module):
         """Execute the module."""
-        t0 = time.time()
-        code = None
-        if sys.flags.cds_mode == 2:
-            if not hasattr(sys, 'shared_code'):
-                sys.shared_code = sys.shm_getobj()
-            code = sys.shared_code.get(module.__name__, None)
-            if not code:
-                print('[sharedcode] can not found ' + module.__name__, file=sys.stderr)
-
-        if code is None:
-            code = self.get_code(module.__name__)
-            if sys.flags.cds_mode == 1:
-                if not hasattr(sys, 'shared_code'):
-                    sys.shared_code = {}
-                sys.shared_code[module.__name__] = code
-
-        if sys.flags.cds_verbose >= 2:
-            print('[get_code] ' + module.__name__ + ': ' + str((time.time() - t0) * 1000), file=sys.stderr)
+        code = self.get_code(module.__name__)
         if code is None:
             raise ImportError('cannot load module {!r} when get_code() '
                               'returns None'.format(module.__name__))
@@ -876,16 +860,6 @@ class _LoaderBasics:
     def load_module(self, fullname):
         """This module is deprecated."""
         return _bootstrap._load_module_shim(self, fullname)
-
-
-if sys.flags.cds_mode == 1:
-    def shm_hook():
-        shared_code = getattr(sys, 'shared_code', None)
-        if shared_code is not None:
-            sys.shm_move_in(shared_code)
-
-
-    atexit.register(shm_hook)
 
 
 class SourceLoader(_LoaderBasics):
@@ -1737,3 +1711,78 @@ def _install(_bootstrap_module):
     supported_loaders = _get_supported_file_loaders()
     sys.path_hooks.extend([FileFinder.path_hook(*supported_loaders)])
     sys.meta_path.append(PathFinder)
+
+    patch_import_paths()
+
+
+def patch_import_paths():
+    if sys.flags.cds_mode == 2:
+        sys.meta_path.insert(0, CDSFinder)
+    elif sys.flags.cds_mode == 1:
+        def patch(orig_get_code):
+            # fixme: maybe @classmethod?
+            def wrap_get_code(self, name):
+                code = orig_get_code(self, name)
+                if code is not None:
+                    if not hasattr(sys, 'shared_code'):
+                        sys.shared_code = {}
+                    sys.shared_code[name] = code
+                return code
+            return wrap_get_code
+
+        SourceFileLoader.get_code = patch(SourceFileLoader.get_code)
+        SourcelessFileLoader.get_code = patch(SourcelessFileLoader.get_code)
+
+        import atexit
+
+        def shm_hook():
+            shared_code = getattr(sys, 'shared_code', None)
+            if shared_code is not None:
+                sys.shm_move_in(shared_code)
+
+        atexit.register(shm_hook)
+
+class CDSFinder:
+    # class-level cache
+    shared_code: dict
+
+    # Start of importlib.abc.MetaPathFinder interface.
+    @classmethod
+    def find_spec(cls, fullname, path, target=None):
+        if not hasattr(cls, 'shared_code'):
+            cls.shared_code = sys.shm_getobj()
+        if (
+                cls.shared_code is None or
+                not isinstance(cls.shared_code, dict) or
+                fullname not in cls.shared_code
+        ):
+            return None
+        code = cls.shared_code[fullname]
+        loader = cls(fullname, code)
+        spec = _bootstrap.ModuleSpec(fullname, loader, origin=None,
+                                     is_package=any(i.startswith(fullname) and i != fullname for i in cls.shared_code.keys()))
+        return spec
+
+    @classmethod
+    def invalidate_caches(cls):
+        pass
+    # End of importlib.abc.MetaPathFinder interface.
+
+    # Start of importlib.abc.Loader interface.
+    def __init__(self, fullname, code):
+        self.fullname = fullname
+        self.code = code
+
+    def create_module(self, spec):
+        return None
+    def exec_module(self, module):
+        _bootstrap._call_with_frames_removed(exec, self.code, module.__dict__)
+    # # Start of importlib.abc.InspectLoader interface.
+    # def get_code(self, fullname):
+    #     print('get_code', file=sys.stderr)
+    # # Start of importlib.abc.ExecutionLoader interface.
+    # def get_source(self, fullname):
+    #     print('get_source', file=sys.stderr)
+    # # End of importlib.abc.ExecutionLoader interface.
+    # # End of importlib.abc.InspectLoader interface.
+    # End of importlib.abc.Loader interface.
