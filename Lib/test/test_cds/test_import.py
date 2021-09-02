@@ -43,3 +43,9 @@ class CdsImportTest(CdsTestMixin, unittest.TestCase):
             '-c', printer,
             **self.get_cds_env(2, self.TEST_ARCHIVE, 2))
         self.assertEqual(trace_out.out.decode(), replay_out.out.decode())
+
+    def test_archive_not_exist_warning(self):
+        out = self.assert_python_ok(
+            '-c', '',
+            **self.get_cds_env(2, self.TEST_ARCHIVE, 2))
+        self.assertIn('[sharedheap] open mmap file failed.', out.err.decode())

@@ -39,22 +39,42 @@ nanoTime()
     return t.tv_sec * 1000000000 + t.tv_nsec;
 }
 
+void
+verbose(int verbosity, const char *fmt, ...)
+{
+    if (Py_CDSVerboseFlag >= verbosity) {
+        va_list arg;
+        va_start(arg, fmt);
+        fprintf(stderr, "[sharedheap] ");
+        vfprintf(stderr, fmt, arg);
+        fprintf(stderr, "\n");
+        va_end(arg);
+    }
+}
+
+#define CHECK_NAME(archive)                                 \
+    if ((archive) == NULL) {                                \
+        verbose(0, "PYCDSARCHIVE not specific, skip CDS."); \
+        return NULL;                                        \
+    }
+
 void *
 _PyMem_CreateSharedMmap(wchar_t *const archive)
 {
+    CHECK_NAME(archive);
     fd =
         open(Py_EncodeLocale(archive, NULL), O_RDWR | O_CREAT | O_TRUNC, 0666);
     if (fd < 0) {
-        perror("open");
-        exit(-1);
+        verbose(0, "create mmap file failed.");
+        return NULL;
     }
     ftruncate(fd, IMG_SIZE);
 
     shm = mmap(REQUESTING_ADDR, IMG_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED,
                fd, 0);
     if (shm == MAP_FAILED) {
-        perror("mmap");
-        abort();
+        verbose(0, "mmap failed, file will not be cleaned.");
+        return NULL;
     }
     h = (struct HeapArchiveHeader *)shm;
     h->mapped_addr = shm;
@@ -78,58 +98,56 @@ patch_obj_header(void);
 void *
 _PyMem_LoadSharedMmap(wchar_t *const archive)
 {
-    long t0 = nanoTime();
+    CHECK_NAME(archive);
+    //    long t0 = nanoTime();
     char *local_archive = Py_EncodeLocale(archive, NULL);
-    if (local_archive == NULL) {
-        // todo: error handling
-    }
     fd = open(local_archive, O_RDWR);
-    struct stat buf;
-    fstat(fd, &buf);
+    if (fd < 0) {
+        verbose(0, "open mmap file failed.");
+        goto fail;
+    }
     struct HeapArchiveHeader hbuf;
     if (read(fd, &hbuf, sizeof(hbuf)) != sizeof(hbuf)) {
-        printf("%zd\n", read(fd, &hbuf, sizeof(hbuf)));
-        perror("read header");
-        abort();
+        verbose(0, "read header failed.");
+        goto fail;
     }
-    if (Py_CDSVerboseFlag > 0) {
-        fprintf(stderr, "[sharedheap] requesting %p...", hbuf.mapped_addr);
-    }
+    verbose(2, "requesting %p...\n", hbuf.mapped_addr);
     size_t aligned_size = ALIEN_TO(hbuf.used, 4096);
     shm = mmap(
         hbuf.mapped_addr, aligned_size, PROT_READ | PROT_WRITE,
         MAP_PRIVATE | MAP_FIXED | (USING_MMAP ? M_POPULATE : MAP_ANONYMOUS),
         fd, 0);
-    long t1 = nanoTime();
+    //    long t1 = nanoTime();
     if (shm == MAP_FAILED) {
-        perror("mmap failed");
-        abort();
+        verbose(0, "mmap failed.");
+        goto fail;
     }
     else if (shm != hbuf.mapped_addr) {
-        perror("mmap relocated");
-        abort();
+        verbose(0, "mmap relocated.");
+        goto fail;
     }
     h = REINTERPRET_CAST(struct HeapArchiveHeader, shm);
-    if (USING_MMAP) {
-        for (size_t i = 0; i < h->used; i += 4096) {
-            ((char volatile *)shm)[i] += 0;
-        }
-    }
-    else {
-        lseek(fd, 0, SEEK_SET);
-        size_t nread = 0;
-        while (nread < hbuf.used) {
-            nread += read(fd, shm + nread, hbuf.used - nread);
-        }
-    }
-    close(fd);
-    long t2 = nanoTime();
-    if (Py_CDSVerboseFlag > 0) {
-        fprintf(stderr, "[sharedheap] SUCCESS elapsed=%ld ns (%ld + %ld)\n", t2 - t0,
-               t1 - t0, t2 - t1);
-    }
+    //    if (USING_MMAP) {
+    //        for (size_t i = 0; i < h->used; i += 4096) {
+    //            ((char volatile *)shm)[i] += 0;
+    //        }
+    //    }
+    //    else {
+    //        lseek(fd, 0, SEEK_SET);
+    //        size_t nread = 0;
+    //        while (nread < hbuf.used) {
+    //            nread += read(fd, shm + nread, hbuf.used - nread);
+    //        }
+    //    }
+    //    close(fd);
+    //    long t2 = nanoTime();
+    //    verbose(0, "SUCCESS elapsed=%ld ns (%ld + %ld)\n", t2 - t0, t1 - t0,
+    //            t2 - t1);
     patch_obj_header();
     return shm;
+fail:
+    close(fd);
+    return NULL;
 }
 
 void

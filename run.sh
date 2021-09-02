@@ -1,19 +1,43 @@
-M=logging,json,decimal
+set -e
 
-PROG="import $M"
+M=numpy
+V=venv
 P=./python.exe
+O=tmp.log
+IMG=test.img
 
-export PYTHONHASHSEED=0
-#export PYTHONPROFILEIMPORTTIME=1
+conda deactivate >/dev/null 2>&1 || true
+rm -rf $V && $P -m venv $V && source $V/bin/activate
+P=python
+pip install -qq numpy
 
-PYTHONSHAREDCODE=1 $P -c "import $M" >/dev/null 2>&1
-time PYTHONVERBOSE2=0 PYTHONSHAREDCODE=2 $P -c "$PROG"
-time PYTHONVERBOSE2=0 $P -c "$PROG"
+export PYTHONPROFILEIMPORTTIME=x
+export PYCDSVERBOSE=2
+export PYTHONDONTWRITEBYTECODE=1
+find . -depth -name '__pycache__' -exec rm -rf {} ';'
+find . -name '*.py[co]' -exec rm -f {} ';'
 
-echo
+function foo() {
+  # time output differently on Linux and Macos, do not parse.
+  time ($P -c "import $M" >$O 2>&1)
+#  $P -c "import $M" >$O 2>&1
+  # total import time of all packages
+  ALL=$(grep 'import time' < $O | awk '{if(NR>1) s+=$3} END {print s}')
+  # total import time of top-level packages (cumulative)
+  TOP=$(grep '\d | [^ ]' < $O | grep 'import time' | awk '{if(NR>1) s+=$5} END {print s}')
+  echo "$ALL $TOP"
+}
 
-#PYTHONSHAREDCODE=1 $P -c "import $M" >/dev/null&& PYTHONVERBOSE2=1 PYTHONSHAREDCODE=2 $P -c "$PROG" 2>&1| grep get_code | awk '{s+=$3} END {print s}'
-#PYTHONSHAREDCODE=1 $P -c "import $M" >/dev/null&& PYTHONVERBOSE2=1 PYTHONSHAREDCODE=2 $P -c "$PROG" 2>&1| grep find_spec | awk '{s+=$3} END {print s}'
-echo
-PYTHONVERBOSE2=1 $P -c "$PROG"  2>&1| grep get_code | awk '{s+=$3} END {print s}'
-PYTHONVERBOSE2=1 $P -c "$PROG"  2>&1| grep find_spec | awk '{s+=$3} END {print s}'
+PYCDSMODE=1 PYCDSARCHIVE=$IMG foo > /dev/null 2>&1
+
+# no CDS, no PYC
+PYCDSMODE=0 foo
+# CDS, no PYC
+PYCDSMODE=2 PYCDSARCHIVE=$IMG foo
+
+export PYTHONDONTWRITEBYTECODE=
+foo > /dev/null 2>&1
+# no CDS, PYC
+PYCDSMODE=0 foo
+# CDS, PYC
+PYCDSMODE=2 PYCDSARCHIVE=$IMG foo
