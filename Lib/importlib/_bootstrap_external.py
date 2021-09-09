@@ -1729,7 +1729,7 @@ class SharedCodeWrap:
             _cds_verbose('shared_code storage is None, initializing.', 1)
             cls.shared_code = {}
         if cls.shared_data is None:
-            _cds_verbose('shared_code storage is None, initializing.', 1)
+            _cds_verbose('shared_data storage is None, initializing.', 1)
             cls.shared_data = {}
 
     @classmethod

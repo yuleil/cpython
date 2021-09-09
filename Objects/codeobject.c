@@ -329,7 +329,8 @@ PyObject *
 _PyCode_Patch(void *p, long shift)
 {
     PyObject *op = *((PyObject **)p);
-    op->ob_type = &PyCode_Type;
+    if (shift)
+        Py_TYPE(op) = &PyCode_Type;
     PyCodeObject *co = (PyCodeObject *)op;
 
 #define DESERIALIZE_CAST_FIELD(field)             \
@@ -346,8 +347,6 @@ _PyCode_Patch(void *p, long shift)
     DESERIALIZE_CAST_FIELD(co_filename);
     DESERIALIZE_CAST_FIELD(co_lnotab);
 #undef DESERIALIZE_CAST_FIELD
-
-    Py_INCREF(co);
 
     return NULL;
 }

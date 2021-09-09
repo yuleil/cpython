@@ -1,14 +1,12 @@
-#define IMG_SIZE (1024 * 1024 * 1024)
-#define REQUESTING_ADDR ((void *)0x280000000L)
-
 #include "sharedheap.h"
+
+#define FAST_PATCH 1
 
 #include <fcntl.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/mman.h>
-#include <sys/stat.h>
 #include <unistd.h>
 
 #define USING_MMAP 1
@@ -19,6 +17,7 @@ static int n_alloc;
 static long shift;
 static bool dumped;
 static int fd;
+static long t0, t1, t2, t3;
 
 static inline long
 nanoTime()
@@ -90,7 +89,7 @@ void *
 _PyMem_LoadSharedMmap(wchar_t *const archive)
 {
     CHECK_NAME(archive);
-    long t0 = nanoTime();
+    t0 = nanoTime();
     char *local_archive = Py_EncodeLocale(archive, NULL);
     fd = open(local_archive, O_RDWR);
     if (fd < 0) {
@@ -108,7 +107,7 @@ _PyMem_LoadSharedMmap(wchar_t *const archive)
         hbuf.mapped_addr, aligned_size, PROT_READ | PROT_WRITE,
         MAP_PRIVATE | MAP_FIXED | (USING_MMAP ? M_POPULATE : MAP_ANONYMOUS),
         fd, 0);
-    long t1 = nanoTime();
+    t1 = nanoTime();
     if (shm == MAP_FAILED) {
         verbose(0, "mmap failed.");
         goto fail;
@@ -132,9 +131,11 @@ _PyMem_LoadSharedMmap(wchar_t *const archive)
     //    }
     //    close(fd);
     prepare_shared_heap();
-    long t2 = nanoTime();
-    verbose(2, "mmap success elapsed=%ld ns (%ld + %ld)", t2 - t0, t1 - t0,
-            t2 - t1);
+    t3 = nanoTime();
+    verbose(2, "ASLR data segment shift = %c0x%lx", shift < 0 ? '-' : ' ',
+            labs(shift));
+    verbose(1, "mmap success elapsed=%ld ns (%ld + %ld + %ld)", t3 - t0,
+            t1 - t0, t2 - t1, t3 - t2);
     return shm;
 fail:
     close(fd);
@@ -145,6 +146,8 @@ fail:
 void
 patch_pyobject(PyObject **ref, long shift, bool not_serialization)
 {
+    if (FAST_PATCH && shift == 0)
+        return;
     PyObject *op = *ref;
     if (op == NULL) {
         // deserialize later
@@ -172,7 +175,6 @@ patch_pyobject(PyObject **ref, long shift, bool not_serialization)
                 Py_FatalError("todo message.");
             }
         }
-        Py_INCREF(*ref);
     }
 }
 
@@ -183,9 +185,8 @@ prepare_shared_heap(void)
     if (h->none_addr) {
         shift = (void *)Py_None - (void *)h->none_addr;
     }
-    if (shift) {
-        patch_pyobject(&h->obj, shift, false);
-    }
+    patch_pyobject(&h->obj, shift, false);
+    t2 = nanoTime();
     // reverse order to make sure leaf objects get deserialized first.
     for (int i = h->serialized_count - 1; i >= 0; --i) {
         HeapSerializedObject *serialized = &h->serialized_array[i];
@@ -197,9 +198,7 @@ prepare_shared_heap(void)
         PyObject *real = ty->tp_patch(serialized->obj, shift);
         assert(real != NULL);
         *((PyObject **)serialized->archive_addr_to_patch) = real;
-        PyObject_Print(real, stderr, 0);
     }
-    verbose(0, "finish prepare");
 }
 
 static void *
@@ -284,6 +283,7 @@ _PyMem_SharedGetObj()
             obj = Py_None;
         }
     }
+    // extra INCREF to make sure no GC happened to archived object
     Py_INCREF(obj);
     return obj;
 }

@@ -1023,12 +1023,10 @@ _PyFrozenSet_Patch(void *p, long shift)
     HeapArchivedSet *archived_set = (HeapArchivedSet *)p;
     HeapArchivedSetItem *item = archived_set->head;
     while (item != NULL) {
-        if (shift)
-            patch_pyobject(&item->item, shift, false);
+        patch_pyobject(&item->item, shift, false);
         PySet_Add(set, item->item);
         item = item->next;
     }
-    Py_INCREF(set);
     return set;
 }
 

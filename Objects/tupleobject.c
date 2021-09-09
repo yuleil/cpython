@@ -650,10 +650,10 @@ PyObject *
 _PyTuple_Patch(void *p, long shift)
 {
     PyTupleObject *op = *((PyTupleObject **)p);
-    Py_TYPE(op) = &PyTuple_Type;
+    if (shift)
+        Py_TYPE(op) = &PyTuple_Type;
     for (Py_ssize_t i = Py_SIZE(op); --i >= 0;)
         patch_pyobject(&op->ob_item[i], shift, false);
-    Py_INCREF(op);
     return NULL;
 }
 
