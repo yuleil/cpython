@@ -12,7 +12,7 @@ class CdsImportTest(CdsTestMixin, unittest.TestCase):
             '-c', f'import json',
             **self.get_cds_env(1, self.TEST_ARCHIVE, 2))
         out = self.assert_python_ok(
-            '-c', f'import sys; print(sys.shm_getobj().keys())',
+            '-c', f'import sys; print(dict(sys.shm_getobj()).keys())',
             **self.get_cds_env(10, self.TEST_ARCHIVE, 2))
         self.assertIn("'json'", out.out.decode())
 

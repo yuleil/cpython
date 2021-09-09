@@ -273,8 +273,9 @@ PyCode_NewWithPosOnlyArgs(int argcount, int posonlyargcount, int kwonlyargcount,
     return co;
 }
 
-void *
-_PyCode_Serialize(PyObject *src0, void *(*alloc)(size_t))
+void
+_PyCode_MoveIn(PyObject *src0, PyObject **target, void *ctx,
+               void *(*alloc)(size_t))
 {
     PyCodeObject *fromCo = (PyCodeObject *)src0;
 
@@ -290,14 +291,9 @@ _PyCode_Serialize(PyObject *src0, void *(*alloc)(size_t))
     PyCodeObject *co = (PyCodeObject *)alloc(_PyObject_SIZE(&PyCode_Type));
     PyObject_INIT(co, &PyCode_Type);
 
-
-    // Force converting HeapArchivedObject* (to void*) to PyObject*,
-    // this doesn't feel very right but works so far.
-#define SERIALIZE_CAST_FIELD(field)                          \
-    do {                                                     \
-        co->field = REINTERPRET_CAST(                        \
-            PyObject,                                        \
-            serialize(fromCo->field, alloc));                \
+#define SERIALIZE_CAST_FIELD(field)                     \
+    do {                                                \
+        move_in(fromCo->field, &co->field, ctx, alloc); \
     } while (0)
 
     co->co_argcount = fromCo->co_argcount;
@@ -326,18 +322,19 @@ _PyCode_Serialize(PyObject *src0, void *(*alloc)(size_t))
     co->co_opcache_size = 0;
 #undef SERIALIZE_CAST_FIELD
 
-    return (PyObject *)co;
+    *target = (PyObject *)co;
 }
 
 PyObject *
-_PyCode_Deserialize(void *p, long shift)
+_PyCode_Patch(void *p, long shift)
 {
-    PyCodeObject *co = (PyCodeObject *)p;
-    Py_TYPE(co) = &PyCode_Type;
+    PyObject *op = *((PyObject **)p);
+    op->ob_type = &PyCode_Type;
+    PyCodeObject *co = (PyCodeObject *)op;
 
-#define DESERIALIZE_CAST_FIELD(field)                     \
-    do {                                                  \
-        co->field = deserialize((void*)co->field, shift); \
+#define DESERIALIZE_CAST_FIELD(field)             \
+    do {                                          \
+        patch_pyobject(&co->field, shift, false); \
     } while (0)
     DESERIALIZE_CAST_FIELD(co_code);
     DESERIALIZE_CAST_FIELD(co_consts);
@@ -352,7 +349,7 @@ _PyCode_Deserialize(void *p, long shift)
 
     Py_INCREF(co);
 
-    return (PyObject *)co;
+    return NULL;
 }
 
 PyCodeObject *
@@ -1065,8 +1062,8 @@ PyTypeObject PyCode_Type = {
     0,                                  /* tp_init */
     0,                                  /* tp_alloc */
     code_new,                           /* tp_new */
-    .tp_archive_serialize = _PyCode_Serialize,
-    .tp_archive_deserialize = _PyCode_Deserialize,
+    .tp_move_in = _PyCode_MoveIn,
+    .tp_patch = _PyCode_Patch,
 };
 
 /* Use co_lnotab to compute the line number from a bytecode index, addrq.  See

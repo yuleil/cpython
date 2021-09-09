@@ -273,8 +273,8 @@ struct _typeobject {
     vectorcallfunc tp_vectorcall;
 
     /* CDS fields will change size of `builtins.type`, suppress warning in _warnings.c */
-    serializearchivefunc tp_archive_serialize;
-    deserializearchivefunc tp_archive_deserialize;
+    archivemoveinfunc tp_move_in;
+    archivepatchfunc tp_patch;
 };
 
 /* The *real* layout of a type object when allocated on the heap */

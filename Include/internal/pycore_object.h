@@ -8,6 +8,8 @@ extern "C" {
 #  error "this header requires Py_BUILD_CORE define"
 #endif
 
+#include "sharedheap.h"
+
 #include "pycore_gc.h"         // _PyObject_GC_IS_TRACKED()
 #include "pycore_interp.h"     // PyInterpreterState.gc
 #include "pycore_pystate.h"    // _PyThreadState_GET()
@@ -106,7 +108,7 @@ _PyType_HasFeature(PyTypeObject *type, unsigned long feature) {
 static inline int
 _PyObject_IS_GC(PyObject *obj)
 {
-    return (PyType_IS_GC(Py_TYPE(obj))
+    return ((!_PyMem_IsShared(obj)) && PyType_IS_GC(Py_TYPE(obj))
             && (Py_TYPE(obj)->tp_is_gc == NULL
                 || Py_TYPE(obj)->tp_is_gc(obj)));
 }

@@ -213,23 +213,14 @@ PyFloat_FromString(PyObject *v)
     return result;
 }
 
-void *
-_PyFloat_Serialize(PyObject *src0, void *(*alloc)(size_t))
+void
+_PyFloat_MoveIn(PyObject *src0, PyObject **target, void *ctx, void *(*alloc)(size_t))
 {
     PyFloatObject *op = alloc(_PyObject_SIZE(&PyFloat_Type));
     PyObject_INIT(op, &PyFloat_Type);
 
     op->ob_fval = ((PyFloatObject *) src0)->ob_fval;
-    return (PyObject *) op;
-}
-
-PyObject *
-_PyFloat_Deserialize(void *p, long shift)
-{
-    PyObject *r = (PyObject *)p;
-    r->ob_type = (PyTypeObject *)((void *)r->ob_type + shift);
-    Py_INCREF(r);
-    return r;
+    *target = (PyObject *) op;
 }
 
 static void
@@ -1937,8 +1928,7 @@ PyTypeObject PyFloat_Type = {
     0,                                          /* tp_init */
     0,                                          /* tp_alloc */
     float_new,                                  /* tp_new */
-    .tp_archive_serialize = _PyFloat_Serialize,
-    .tp_archive_deserialize = _PyFloat_Deserialize,
+    .tp_move_in = _PyFloat_MoveIn,
 };
 
 int

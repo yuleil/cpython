@@ -192,8 +192,9 @@ typedef int (*descrsetfunc) (PyObject *, PyObject *, PyObject *);
 typedef int (*initproc)(PyObject *, PyObject *, PyObject *);
 typedef PyObject *(*newfunc)(PyTypeObject *, PyObject *, PyObject *);
 typedef PyObject *(*allocfunc)(PyTypeObject *, Py_ssize_t);
-typedef void *(*serializearchivefunc)(PyObject *, void *(*)(size_t));
-typedef PyObject *(*deserializearchivefunc)(void *, long);
+typedef void (*archivemoveinfunc)(PyObject *, PyObject **, void *,
+                                  void *(*)(size_t));
+typedef PyObject *(*archivepatchfunc)(void *, long);
 
 typedef struct{
     int slot;    /* slot id, see below */

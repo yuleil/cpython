@@ -249,7 +249,7 @@ exit:
 static PyObject *
 sys_shm_move_in(PyObject *module, PyObject *arg)
 {
-    if (!Py_TYPE(arg)->tp_archive_serialize) {
+    if (!Py_TYPE(arg)->tp_move_in) {
         _PyArg_BadArgument("move_in", "argument", "serializable", arg);
         return NULL;
     }

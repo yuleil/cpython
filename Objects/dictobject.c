@@ -117,8 +117,6 @@ converting the dict to the combined table.
 #include "dict-common.h"
 #include "stringlib/eq.h"    // unicode_eq()
 
-#include "sharedheap.h"
-
 /*[clinic input]
 class dict "PyDictObject *" "&PyDict_Type"
 [clinic start generated code]*/
@@ -3154,56 +3152,6 @@ dict_traverse(PyObject *op, visitproc visit, void *arg)
     return 0;
 }
 
-struct HeapArchivedDictItem {
-    struct HeapArchivedObject *key;
-    struct HeapArchivedObject *value;
-    struct HeapArchivedDictItem *next;
-};
-struct HeapArchivedDict {
-    struct HeapArchivedDictItem *head;
-    dict_lookup_func lookup;
-};
-
-void *
-_PyDict_Serialize(PyObject *src0, void *(*alloc)(size_t))
-{
-    Py_ssize_t i = 0;
-    PyObject *key, *value;
-    struct HeapArchivedDictItem *head = NULL, *prev, *cur;
-    while (PyDict_Next(src0, &i, &key, &value)) {
-        prev = cur;
-        cur = alloc(sizeof(struct HeapArchivedDictItem));
-        if (head == NULL) {
-            head = cur;
-        } else if (prev != NULL) {
-            prev->next = cur;
-        }
-        cur->key = serialize(key, alloc);
-        cur->value = serialize(value, alloc);
-    }
-
-    struct HeapArchivedDict *archived_dict = alloc(sizeof(struct HeapArchivedDict));
-
-    archived_dict->head = head;
-    archived_dict->lookup = ((PyDictObject *)(src0))->ma_keys->dk_lookup;
-
-    return archived_dict;
-}
-
-PyObject *
-_PyDict_Deserialize(void *p, long shift)
-{
-    PyObject *op = PyDict_New();
-    struct HeapArchivedDict *archived_dict = (struct HeapArchivedDict *)p;
-    struct HeapArchivedDictItem *item = archived_dict->head;
-    while (item != NULL) {
-        PyObject *key = deserialize(item->key, shift), *value = deserialize(item->value, shift);
-        PyDict_SetItem(op, key, value);
-        item = item->next;
-    }
-    return op;
-}
-
 static int
 dict_tp_clear(PyObject *op)
 {
@@ -3509,8 +3457,6 @@ PyTypeObject PyDict_Type = {
     dict_new,                                   /* tp_new */
     PyObject_GC_Del,                            /* tp_free */
     .tp_vectorcall = dict_vectorcall,
-    .tp_archive_serialize = _PyDict_Serialize,
-    .tp_archive_deserialize = _PyDict_Deserialize,
 };
 
 PyObject *

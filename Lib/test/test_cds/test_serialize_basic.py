@@ -86,3 +86,8 @@ class CdsSerializeBasicTest(SerializeTestMixin, unittest.TestCase):
     @assert_archive_created
     def test_bytes(self):
         self.run_serialize_test(''.join(random.choice(string.printable) for _ in range(10000)).encode())
+
+    @assert_archive_created
+    def test_tuple(self):
+        self.run_serialize_test(())
+        self.run_serialize_test((1,))

@@ -1046,23 +1046,14 @@ complex_new_impl(PyTypeObject *type, PyObject *r, PyObject *i)
     return complex_subtype_from_doubles(type, cr.real, ci.real);
 }
 
-void *
-_PyComplex_Serialize(PyObject *src0, void *(*alloc)(size_t))
+void
+_PyComplex_MoveIn(PyObject *src0, PyObject **target, void *ctx, void *(*alloc)(size_t))
 {
     PyComplexObject *op = alloc(_PyObject_SIZE(&PyComplex_Type));
     PyObject_INIT(op, &PyComplex_Type);
 
     op->cval = ((PyComplexObject *) src0)->cval;
-    return (PyObject *) op;
-}
-
-PyObject *
-_PyComplex_Deserialize(void *p, long shift)
-{
-    PyObject *r = (PyObject *)p;
-    r->ob_type = (PyTypeObject *)((void *)r->ob_type + shift);
-    Py_INCREF(r);
-    return r;
+    *target = (PyObject *) op;
 }
 
 static PyNumberMethods complex_as_number = {
@@ -1141,6 +1132,5 @@ PyTypeObject PyComplex_Type = {
     PyType_GenericAlloc,                        /* tp_alloc */
     complex_new,                                /* tp_new */
     PyObject_Del,                               /* tp_free */
-    .tp_archive_serialize = _PyComplex_Serialize,
-    .tp_archive_deserialize = _PyComplex_Deserialize,
+    .tp_move_in = _PyComplex_MoveIn,
 };

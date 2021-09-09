@@ -627,12 +627,12 @@ tupletraverse(PyTupleObject *o, visitproc visit, void *arg)
 
 #include "sharedheap.h"
 
-void *
-_PyTuple_Serialize(PyObject *src0, void *(*alloc)(size_t))
+void
+_PyTuple_MoveIn(PyObject *src0, PyObject **target, void *ctx, void *(*alloc)(size_t))
 {
     if (!PyTuple_CheckExact(src0)) {
         PyErr_BadInternalCall();
-        return NULL;
+        return;
     }
     PyTupleObject *fromOp = (PyTupleObject *)src0;
     Py_ssize_t sz = Py_SIZE(fromOp);
@@ -641,20 +641,20 @@ _PyTuple_Serialize(PyObject *src0, void *(*alloc)(size_t))
     (void)PyObject_INIT_VAR(op, &PyTuple_Type, sz);
     for (Py_ssize_t i = 0; i < sz; i++) {
         PyObject *elem = fromOp->ob_item[i];
-        op->ob_item[i] = REINTERPRET_CAST(PyObject, serialize(elem, alloc));
+        move_in(elem, &op->ob_item[i], ctx, alloc);
     }
-    return (PyObject *)op;
+    *target = (PyObject *)op;
 }
 
 PyObject *
-_PyTuple_Deserialize(void *p, long shift)
+_PyTuple_Patch(void *p, long shift)
 {
-    PyTupleObject *op = (PyTupleObject *)p;
+    PyTupleObject *op = *((PyTupleObject **)p);
     Py_TYPE(op) = &PyTuple_Type;
     for (Py_ssize_t i = Py_SIZE(op); --i >= 0;)
-        op->ob_item[i] = deserialize((void *)op->ob_item[i], shift);
+        patch_pyobject(&op->ob_item[i], shift, false);
     Py_INCREF(op);
-    return (PyObject *)op;
+    return NULL;
 }
 
 static PyObject *
@@ -921,8 +921,8 @@ PyTypeObject PyTuple_Type = {
     tuple_new,                                  /* tp_new */
     PyObject_GC_Del,                            /* tp_free */
     .tp_vectorcall = tuple_vectorcall,
-    .tp_archive_serialize = _PyTuple_Serialize,
-    .tp_archive_deserialize = _PyTuple_Deserialize,
+    .tp_move_in = _PyTuple_MoveIn,
+    .tp_patch = _PyTuple_Patch,
 };
 
 /* The following function breaks the notion that tuples are immutable:

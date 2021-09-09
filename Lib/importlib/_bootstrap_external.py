@@ -25,6 +25,7 @@ import _io
 import sys
 import _warnings
 import marshal
+import time
 
 
 _MS_WINDOWS = (sys.platform == 'win32')
@@ -848,7 +849,9 @@ class _LoaderBasics:
 
     def exec_module(self, module):
         """Execute the module."""
+        t0 = time.time()
         code = self.get_code(module.__name__)
+        _cds_verbose('[get_code] ' + module.__name__ + ': ' + str((time.time() - t0) * 1000), 2)
         if code is None:
             raise ImportError('cannot load module {!r} when get_code() '
                               'returns None'.format(module.__name__))
@@ -1411,7 +1414,9 @@ class PathFinder:
         """
         if path is None:
             path = sys.path
+        t0 = time.time()
         spec = cls._get_spec(fullname, path, target)
+        _cds_verbose('[find_spec] ' + fullname + ': ' + str((time.time() - t0) * 1000), 2)
         if spec is None:
             return None
         elif spec.loader is None:
@@ -1750,10 +1755,10 @@ class SharedCodeWrap:
     def get_shared_module(cls):
         cls.ensure_initialized()
 
-        return {
+        return tuple([(k, v) for k, v in {
             k: (*cls.shared_data[k], cls.shared_code[k])
             for k in cls.shared_code.keys() & cls.shared_data.keys()
-        }
+        }.items()])
 
 
 def patch_import_paths():
@@ -1769,9 +1774,11 @@ def patch_import_paths():
                 else:
                     _cds_verbose(f"{self.__class__.__name__}.get_code('{name}') returns None.", 2)
                 return code
+
             return wrap_get_code
 
         SourceFileLoader.get_code = patch_get_code(SourceLoader.get_code)
+
         # SourcelessFileLoader.get_code = patch_get_code(SourcelessFileLoader.get_code)
 
         def patch_exec_module(orig_exec_module):
@@ -1784,6 +1791,7 @@ def patch_import_paths():
                     ('__package__', '__file__', '__path__')
                 ))
                 return module
+
             return wrap_exec_module
 
         _LoaderBasics.exec_module = patch_exec_module(_LoaderBasics.exec_module)
@@ -1793,7 +1801,7 @@ def patch_import_paths():
         def shm_hook():
             shared_code = SharedCodeWrap.get_shared_module()
             if shared_code is not None:
-                _cds_verbose(f'moving in modules: {shared_code.keys()}.', 2)
+                _cds_verbose(f'moving in modules: {dict(shared_code).keys()}.', 2)
                 sys.shm_move_in(shared_code)
                 _cds_verbose(f'moving in finished.', 2)
             else:
@@ -1814,15 +1822,20 @@ class CDSFinder:
             shared_module = sys.shm_getobj()
             cls.shared_module_initialized = True
 
-            if not (shared_module and isinstance(shared_module, dict)):
+            if not shared_module:
                 return
-            cls.shared_module = shared_module
+            try:
+                cls.shared_module = dict(shared_module)
+            except:
+                _cds_verbose(0, f'parse failed: {shared_module}')
+                return
         elif (
                 cls.shared_module is None or
                 fullname not in cls.shared_module
         ):
+            _cds_verbose(f"find_spec missed '{fullname}'", 1)
             return None
-        _cds_verbose(f"find_spec hit cached '{fullname}'", 1)
+        t0 = time.time()
         package, file, path, code = cls.shared_module[fullname]
         loader = cls(fullname, code)
         is_package = path is not None
@@ -1832,11 +1845,13 @@ class CDSFinder:
             spec.has_location = True
         if is_package:
             spec.submodule_search_locations = list(path)
+        _cds_verbose('[find_spec] ' + fullname + ': ' + str((time.time() - t0) * 1000), 2)
         return spec
 
     @classmethod
     def invalidate_caches(cls):
         pass
+
     # End of importlib.abc.MetaPathFinder interface.
 
     # Start of importlib.abc.Loader interface.
@@ -1846,6 +1861,7 @@ class CDSFinder:
 
     def create_module(self, spec):
         return None
+
     def exec_module(self, module):
         _cds_verbose(f"exec_module cached '{self.fullname}'", 2)
         _bootstrap._call_with_frames_removed(exec, self.code, module.__dict__)

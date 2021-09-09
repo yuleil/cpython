@@ -304,19 +304,10 @@ _PyLong_Copy(PyLongObject *src)
     return _PyLong_Copy0((PyObject *)src, PyObject_Malloc);
 }
 
-void *
-_PyLong_Serialize(PyObject *src0, void *(*alloc)(size_t))
+void
+_PyLong_MoveIn(PyObject *src0, PyObject **target, void *ctx, void *(*alloc)(size_t))
 {
-    return (void *)_PyLong_Copy0(src0, alloc);
-}
-
-PyObject *
-_PyLong_Deserialize(void *p, long shift)
-{
-    PyObject *op = (PyObject *)p;
-    Py_TYPE(op) = &PyLong_Type;
-    Py_INCREF(op);
-    return op;
+    *target = (void *)_PyLong_Copy0(src0, alloc);
 }
 
 /* Create a new int object from a C long int */
@@ -5737,8 +5728,7 @@ PyTypeObject PyLong_Type = {
     0,                                          /* tp_alloc */
     long_new,                                   /* tp_new */
     PyObject_Del,                               /* tp_free */
-    .tp_archive_serialize = _PyLong_Serialize,
-    .tp_archive_deserialize = _PyLong_Deserialize,
+    .tp_move_in = _PyLong_MoveIn,
 };
 
 static PyTypeObject Int_InfoType;

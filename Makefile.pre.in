@@ -286,6 +286,7 @@ MODULE_OBJS=	\
 		Modules/config.o \
 		Modules/getpath.o \
 		Modules/main.o \
+        Modules/sharedheap.o \
 		Modules/gcmodule.o
 
 IO_H=		Modules/_io/_iomodule.h
@@ -436,7 +437,6 @@ OBJECT_OBJS=	\
 		Objects/namespaceobject.o \
 		Objects/object.o \
 		Objects/obmalloc.o \
-		Objects/sharedheap.o \
 		Objects/picklebufobject.o \
 		Objects/rangeobject.o \
 		Objects/setobject.o \
@@ -1099,6 +1099,7 @@ PYTHON_HEADERS= \
 		$(srcdir)/Include/pytime.h \
 		$(srcdir)/Include/rangeobject.h \
 		$(srcdir)/Include/setobject.h \
+		$(srcdir)/Include/sharedheap.h \
 		$(srcdir)/Include/sliceobject.h \
 		$(srcdir)/Include/structmember.h \
 		$(srcdir)/Include/structseq.h \
