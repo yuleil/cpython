@@ -1,7 +1,9 @@
 #!python
 
 """
-Script to get median time.
+This script is used to get median value of results.
+
+For simple run, run.sh might be better.
 """
 
 import os
