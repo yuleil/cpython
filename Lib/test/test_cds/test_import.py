@@ -2,8 +2,14 @@ import unittest
 
 from .utils import CdsTestMixin, assert_archive_created
 
-
 # todo: verify verbose messages.
+
+
+try:
+    import lzma
+except ImportError:
+    lzma = None
+
 
 class CdsImportTest(CdsTestMixin, unittest.TestCase):
     @assert_archive_created
@@ -49,3 +55,14 @@ class CdsImportTest(CdsTestMixin, unittest.TestCase):
             '-c', '',
             **self.get_cds_env(2, self.TEST_ARCHIVE, 2))
         self.assertIn('[sharedheap] open mmap file failed.', out.err.decode())
+
+    @unittest.skipIf(lzma is not None, 'test only works when lzma is not built.')
+    @assert_archive_created
+    def test_fail_import(self):
+        out = self.assert_python_ok(
+            '-c', 'import zipfile',
+            **self.get_cds_env(1, self.TEST_ARCHIVE, 1))
+        self.assertIn('lzma is re-imported', out.err.decode())
+        self.assert_python_ok(
+            '-c', 'import zipfile',
+            **self.get_cds_env(2, self.TEST_ARCHIVE, 2))

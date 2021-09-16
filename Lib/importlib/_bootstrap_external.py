@@ -1747,7 +1747,9 @@ class SharedCodeWrap:
     def set_module_code(cls, name, code):
         cls.ensure_initialized()
 
-        assert name not in cls.shared_code, name
+        if name in cls.shared_code:
+            # e.g. when import request when lzma is not built.
+            _cds_verbose(f'warning: {name} is re-imported, this might indicates some previous failed import.', 0)
         assert name not in cls.shared_data, name
         cls.shared_code[name] = code
 
